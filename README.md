@@ -1,3 +1,4 @@
+```mermaid
 flowchart LR
 
 %% Proceso y Etapas
@@ -185,3 +186,4 @@ apCal -- "CONFLICTA_CON" --> enCal
 enCal -- "CONFLICTA_CON" --> apCal
 apVen -- "CONFLICTA_CON" --> enVen
 enVen -- "CONFLICTA_CON" --> apVen
+```
