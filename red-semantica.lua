@@ -55,16 +55,6 @@
 
 Corrida-[TIENE_ETAPA_ACTUAL]->Etapa
 
--- Configuración de Rangos
-Rango-[TIENE]->ValorEsperado
-Rango-[TIENE]->Tolerancia
-Rango-[TIENE]->Minimo
-Rango-[TIENE]->Maximo
-ValorEsperado-[DEFINE]->Minimo
-ValorEsperado-[DEFINE]->Maximo
-Tolerancia-[DEFINE]->Minimo
-Tolerancia-[DEFINE]->Maximo
-
 -- Configuración de Etapa: Proceso Térmico
 ProcesoTermico-[INSTANCIA_DE]->Etapa
 Temp80-[INSTANCIA_DE]->Rango
@@ -92,6 +82,8 @@ Corrida-[DETECTA]->Estado
 Corrida-[LEE_TEMPERATURA]->Lectura
 Corrida-[DETECTA_ESTADO]->EstadoCalefactor
 Corrida-[DETECTA_ESTADO]->EstadoVentilador
+Corrida-[TIENE_LECTURA]->Lectura
+Corrida-[TIENE_TEMPERATURA]->TemperaturaInterna
 Lectura-[TIENE_VALOR]->TemperaturaInterna
 Lectura-[TIENE_FECHA_HORA]->FechaHora
 
@@ -146,8 +138,6 @@ Mantener-[TIPO_DE]->Recomendacion
 
 Corrida-[RECOMIENDA]->Recomendacion
 
-
--- Verificar si puedo sacar las reglas y dejar solo las recomendaciones
 -- Reglas de control
 -- Si temperatura alta y calefactor prendido => ApagarCalefactor
 Regla_ApagarCalefactor-[TIPO_DE]->Regla

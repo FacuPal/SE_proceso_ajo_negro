@@ -1,189 +1,117 @@
 ```mermaid
 flowchart LR
 
-%% Proceso y Etapas
-corr["Corrida"]
-etapa["Etapa"]
-procT["ProcesoTermico"]
-enf["Enfriamiento"]
+%% ========== ETAPAS / RANGOS ==========
+Corrida["Corrida"] -- "TIENE_ETAPA_ACTUAL" --> Etapa["Etapa"]
 
-corr -- "TIENE_ETAPA_ACTUAL" --> etapa
-corr -- "INICIA_CON" --> procT
-procT -- "PRECEDE_A" --> enf
-procT -- "INSTANCIA_DE" --> etapa
-enf -- "INSTANCIA_DE" --> etapa
+ProcesoTermico["ProcesoTermico"] -- "INSTANCIA_DE" --> Etapa
+Temp80["Temp80"] -- "INSTANCIA_DE" --> Rango["Rango"]
+Temp80 -- "VALOR_ESPERADO" --> v80["80"]
+Temp80 -- "TOLERANCIA" --> v3a["3"]
+Temp80 -- "MINIMO" --> v77["77"]
+Temp80 -- "MAXIMO" --> v83["83"]
+ProcesoTermico -- "CONFIGURA_TEMPERATURA" --> Temp80
 
-%% Rangos
-rango["Rango"]
-valExp["ValorEsperado"]
-tol["Tolerancia"]
-minv["Minimo"]
-maxv["Maximo"]
+Enfriamiento["Enfriamiento"] -- "INSTANCIA_DE" --> Etapa
+Temp30["Temp30"] -- "INSTANCIA_DE" --> Rango
+Temp30 -- "VALOR_ESPERADO" --> v30["30"]
+Temp30 -- "TOLERANCIA" --> v3b["3"]
+Temp30 -- "MINIMO" --> v27["27"]
+Temp30 -- "MAXIMO" --> v33["33"]
+Enfriamiento -- "CONFIGURA_TEMPERATURA" --> Temp30
 
-rango -- "TIENE" --> valExp
-rango -- "TIENE" --> tol
-rango -- "TIENE" --> minv
-rango -- "TIENE" --> maxv
-valExp -- "DEFINE" --> minv
-valExp -- "DEFINE" --> maxv
-tol -- "DEFINE" --> minv
-tol -- "DEFINE" --> maxv
+Corrida -- "INICIA_CON" --> ProcesoTermico
+ProcesoTermico -- "PRECEDE_A" --> Enfriamiento
 
-temp80["Temp80"]
-v80["80"]
-v3["3"]
-v77["77"]
-v83["83"]
-temp30["Temp30"]
-v30["30"]
-v27["27"]
-v33["33"]
+%% ========== LECTURAS / MEDICIÓN ==========
+Corrida -- "DETECTA" --> Estado["Estado"]
+Corrida -- "LEE_TEMPERATURA" --> Lectura["Lectura"]
+Corrida -- "DETECTA_ESTADO" --> EstadoCalefactor["EstadoCalefactor"]
+Corrida -- "DETECTA_ESTADO" --> EstadoVentilador["EstadoVentilador"]
+Corrida -- "TIENE_LECTURA" --> Lectura
+Corrida -- "TIENE_TEMPERATURA" --> TemperaturaInterna["TemperaturaInterna"]
+Lectura -- "TIENE_VALOR" --> TemperaturaInterna
+Lectura -- "TIENE_FECHA_HORA" --> FechaHora["FechaHora"]
 
-temp80 -- "INSTANCIA_DE" --> rango
-temp80 -- "VALOR_ESPERADO" --> v80
-temp80 -- "TOLERANCIA" --> v3
-temp80 -- "MINIMO" --> v77
-temp80 -- "MAXIMO" --> v83
-procT -- "CONFIGURA_TEMPERATURA" --> temp80
+%% ========== ESTADOS DE TEMPERATURA ==========
+TemperaturaAlta["TemperaturaAlta"] -- "TIPO_DE" --> Estado
+TemperaturaBaja["TemperaturaBaja"] -- "TIPO_DE" --> Estado
+TemperaturaEnRango["TemperaturaEnRango"] -- "TIPO_DE" --> Estado
 
-temp30 -- "INSTANCIA_DE" --> rango
-temp30 -- "VALOR_ESPERADO" --> v30
-temp30 -- "TOLERANCIA" --> v3
-temp30 -- "MINIMO" --> v27
-temp30 -- "MAXIMO" --> v33
-enf -- "CONFIGURA_TEMPERATURA" --> temp30
+%% ========== REGLAS DIAGNÓSTICO (COMPARADORES) ==========
+TemperaturaInterna -- "SI_ES" --> Menor["Menor"]
+Menor -- "QUE" --> Rango
+Menor -- "PRODUCE" --> TemperaturaBaja
 
-%% Monitoreo y Lecturas
-mon["Monitoreo"]
-estado["Estado"]
-lec["Lectura"]
-tempInt["TemperaturaInterna"]
-fechaHora["FechaHora"]
-estCal["EstadoCalefactor"]
-estVen["EstadoVentilador"]
+TemperaturaInterna -- "SI_ES" --> Entre["Entre"]
+Entre -- "QUE" --> Rango
+Entre -- "PRODUCE" --> TemperaturaEnRango
 
-mon -- "DE_CORRIDA" --> corr
-mon -- "DETECTA" --> estado
-mon -- "LEE_TEMPERATURA" --> lec
-mon -- "DETECTA_ESTADO" --> estCal
-mon -- "DETECTA_ESTADO" --> estVen
-lec -- "TIENE_VALOR" --> tempInt
-lec -- "TIENE_FECHA_HORA" --> fechaHora
+TemperaturaInterna -- "SI_ES" --> Mayor["Mayor"]
+Mayor -- "QUE" --> Rango
+Mayor -- "PRODUCE" --> TemperaturaAlta
 
-%% Estados térmicos y comparadores
-tAlta["TemperaturaAlta"]
-tBaja["TemperaturaBaja"]
-tRango["TemperaturaEnRango"]
-menor["Menor"]
-entre["Entre"]
-mayor["Mayor"]
+%% ========== ACTUADORES ==========
+Actuador["Actuador"] -- "TIENE_ESTADO" --> EstadoActuador["EstadoActuador"]
+Actuador -- "TIENE_CAPACIDAD" --> CapacidadTermica["CapacidadTermica"]
+EstadoCalefactor -- "TIPO_DE" --> EstadoActuador
+EstadoVentilador -- "TIPO_DE" --> EstadoActuador
+CapacidadTermica -- "AFECTA" --> TemperaturaInterna
 
-tAlta -- "TIPO_DE" --> estado
-tBaja -- "TIPO_DE" --> estado
-tRango -- "TIPO_DE" --> estado
+Calefactor["Calefactor"] -- "INSTANCIA_DE" --> Actuador
+cap1["1"] -- "INSTANCIA_DE" --> CapacidadTermica
+Calefactor -- "TIENE_CAPACIDAD" --> cap1
+CalefactorPrendido["CalefactorPrendido"] -- "INSTANCIA_DE" --> EstadoCalefactor
+CalefactorApagado["CalefactorApagado"] -- "INSTANCIA_DE" --> EstadoCalefactor
 
-tempInt -- "SI_ES" --> menor
-menor -- "QUE" --> rango
-menor -- "PRODUCE" --> tBaja
+Ventilador["Ventilador"] -- "INSTANCIA_DE" --> Actuador
+capNeg05["(-.5)"] -- "INSTANCIA_DE" --> CapacidadTermica
+Ventilador -- "TIENE_CAPACIDAD" --> capNeg05
+VentiladorPrendido["VentiladorPrendido"] -- "INSTANCIA_DE" --> EstadoVentilador
+VentiladorApagado["VentiladorApagado"] -- "INSTANCIA_DE" --> EstadoVentilador
 
-tempInt -- "SI_ES" --> entre
-entre -- "QUE" --> rango
-entre -- "PRODUCE" --> tRango
+%% ========== RECOMENDACIONES ==========
+ApagarCalefactor["ApagarCalefactor"] -- "TIPO_DE" --> Recomendacion["Recomendacion"]
+EncenderCalefactor["EncenderCalefactor"] -- "TIPO_DE" --> Recomendacion
+EncenderVentilador["EncenderVentilador"] -- "TIPO_DE" --> Recomendacion
+ApagarVentilador["ApagarVentilador"] -- "TIPO_DE" --> Recomendacion
+Mantener["Mantener"] -- "TIPO_DE" --> Recomendacion
 
-tempInt -- "SI_ES" --> mayor
-mayor -- "QUE" --> rango
-mayor -- "PRODUCE" --> tAlta
+Corrida -- "RECOMIENDA" --> Recomendacion
 
-%% Actuadores y capacidades
-act["Actuador"]
-estAct["EstadoActuador"]
-capT["CapacidadTermica"]
-calef["Calefactor"]
-vent["Ventilador"]
-v1["1"]
-vm05["-0.5"]
-calPr["CalefactorPrendido"]
-calAp["CalefactorApagado"]
-venPr["VentiladorPrendido"]
-venAp["VentiladorApagado"]
+%% ========== REGLAS DE CONTROL ==========
+Regla_ApagarCalefactor["Regla_ApagarCalefactor"] -- "TIPO_DE" --> Regla["Regla"]
+Regla_ApagarCalefactor -- "SI" --> TemperaturaAlta
+Regla_ApagarCalefactor -- "REQUIERE_ESTADO" --> CalefactorPrendido
+Regla_ApagarCalefactor -- "PRODUCE" --> ApagarCalefactor
+Regla_ApagarCalefactor -- "PRIORIDAD" --> prio10["10"]
 
-act -- "TIENE_ESTADO" --> estAct
-act -- "TIENE_CAPACIDAD" --> capT
-estCal -- "TIPO_DE" --> estAct
-estVen -- "TIPO_DE" --> estAct
-capT -- "AFECTA" --> tempInt
+Regla_EncenderVentilador["Regla_EncenderVentilador"] -- "TIPO_DE" --> Regla
+Regla_EncenderVentilador -- "SI" --> TemperaturaAlta
+Regla_EncenderVentilador -- "REQUIERE_ESTADO" --> VentiladorApagado
+Regla_EncenderVentilador -- "PRODUCE" --> EncenderVentilador
+Regla_EncenderVentilador -- "PRIORIDAD" --> prio9a["9"]
 
-calef -- "INSTANCIA_DE" --> act
-v1 -- "INSTANCIA_DE" --> capT
-calef -- "TIENE_CAPACIDAD" --> v1
-calPr -- "INSTANCIA_DE" --> estCal
-calAp -- "INSTANCIA_DE" --> estCal
+Regla_EncenderCalefactor["Regla_EncenderCalefactor"] -- "TIPO_DE" --> Regla
+Regla_EncenderCalefactor -- "SI" --> TemperaturaBaja
+Regla_EncenderCalefactor -- "REQUIERE_ESTADO" --> CalefactorApagado
+Regla_EncenderCalefactor -- "PRODUCE" --> EncenderCalefactor
+Regla_EncenderCalefactor -- "PRIORIDAD" --> prio9b["9"]
 
-vent -- "INSTANCIA_DE" --> act
-vm05 -- "INSTANCIA_DE" --> capT
-vent -- "TIENE_CAPACIDAD" --> vm05
-venPr -- "INSTANCIA_DE" --> estVen
-venAp -- "INSTANCIA_DE" --> estVen
+Regla_ApagarVentilador["Regla_ApagarVentilador"] -- "TIPO_DE" --> Regla
+Regla_ApagarVentilador -- "SI" --> TemperaturaBaja
+Regla_ApagarVentilador -- "REQUIERE_ESTADO" --> VentiladorPrendido
+Regla_ApagarVentilador -- "PRODUCE" --> ApagarVentilador
+Regla_ApagarVentilador -- "PRIORIDAD" --> prio8["8"]
 
-%% Recomendaciones
-rec["Recomendacion"]
-apCal["ApagarCalefactor"]
-enCal["EncenderCalefactor"]
-enVen["EncenderVentilador"]
-apVen["ApagarVentilador"]
-mant["Mantener"]
+Regla_Mantener["Regla_Mantener"] -- "TIPO_DE" --> Regla
+Regla_Mantener -- "SI" --> TemperaturaEnRango
+Regla_Mantener -- "PRODUCE" --> Mantener
+Regla_Mantener -- "PRIORIDAD" --> prio1["1"]
 
-apCal -- "TIPO_DE" --> rec
-enCal -- "TIPO_DE" --> rec
-enVen -- "TIPO_DE" --> rec
-apVen -- "TIPO_DE" --> rec
-mant -- "TIPO_DE" --> rec
-mon -- "RECOMIENDA" --> rec
-
-%% Reglas de control
-regla["Regla"]
-rApCal["Regla_ApagarCalefactor"]
-rEnVen["Regla_EncenderVentilador"]
-rEnCal["Regla_EncenderCalefactor"]
-rApVen["Regla_ApagarVentilador"]
-rMant["Regla_Mantener"]
-p10["10"]
-p9["9"]
-p8["8"]
-p1["1"]
-
-rApCal -- "TIPO_DE" --> regla
-rApCal -- "SI" --> tAlta
-rApCal -- "REQUIERE_ESTADO" --> calPr
-rApCal -- "PRODUCE" --> apCal
-rApCal -- "PRIORIDAD" --> p10
-
-rEnVen -- "TIPO_DE" --> regla
-rEnVen -- "SI" --> tAlta
-rEnVen -- "REQUIERE_ESTADO" --> venAp
-rEnVen -- "PRODUCE" --> enVen
-rEnVen -- "PRIORIDAD" --> p9
-
-rEnCal -- "TIPO_DE" --> regla
-rEnCal -- "SI" --> tBaja
-rEnCal -- "REQUIERE_ESTADO" --> calAp
-rEnCal -- "PRODUCE" --> enCal
-rEnCal -- "PRIORIDAD" --> p9
-
-rApVen -- "TIPO_DE" --> regla
-rApVen -- "SI" --> tBaja
-rApVen -- "REQUIERE_ESTADO" --> venPr
-rApVen -- "PRODUCE" --> apVen
-rApVen -- "PRIORIDAD" --> p8
-
-rMant -- "TIPO_DE" --> regla
-rMant -- "SI" --> tRango
-rMant -- "PRODUCE" --> mant
-rMant -- "PRIORIDAD" --> p1
-
-%% Conflictos
-apCal -- "CONFLICTA_CON" --> enCal
-enCal -- "CONFLICTA_CON" --> apCal
-apVen -- "CONFLICTA_CON" --> enVen
-enVen -- "CONFLICTA_CON" --> apVen
+%% ========== CONFLICTOS ==========
+ApagarCalefactor -- "CONFLICTA_CON" --> EncenderCalefactor
+EncenderCalefactor -- "CONFLICTA_CON" --> ApagarCalefactor
+ApagarVentilador -- "CONFLICTA_CON" --> EncenderVentilador
+EncenderVentilador -- "CONFLICTA_CON" --> ApagarVentilador
 ```
