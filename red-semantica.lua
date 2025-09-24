@@ -7,7 +7,7 @@
             -- Cada Etapa-[CONFIGURA_TEMPERATURA]->Rango.
             -- Rango define límites por ValorEsperado y Tolerancia, y sus derivados Minimo y Maximo (ej.: ProcesoTermico con 80 ± 3 → 77..83).
         -- Medición y diagnóstico
-            -- Monitoreo-[LEE_TEMPERATURA]->TemperaturaInterna.
+            -- Corrida-[LEE_TEMPERATURA]->TemperaturaInterna.
             -- Estados de temperatura: TemperaturaBaja, TemperaturaEnRango, TemperaturaAlta.
             -- Reglas (comparadores):
                 -- TemperaturaInterna-[SI_ES]->Menor/Entre/Mayor; Menor/Entre/Mayor-[QUE]->Rango; …-[PRODUCE]->Estado.
@@ -20,8 +20,8 @@
         -- Paso 1: Rango activo
             -- A partir de Corrida-[TIENE_ETAPA_ACTUAL]->Etapa y Etapa-[CONFIGURA_TEMPERATURA]->Rango, el motor selecciona el Rango vigente (Minimo/Maximo) para evaluar la temperatura.
         -- Paso 2: Estado de temperatura
-            -- Monitoreo obtiene TemperaturaInterna y la clasifica usando Menor/Entre/Mayor vs. ese Rango.
-            -- Resultado: Monitoreo-[DETECTA]->TemperaturaBaja/EnRango/Alta.
+            -- Corrida obtiene TemperaturaInterna y la clasifica usando Menor/Entre/Mayor vs. ese Rango.
+            -- Resultado: Corrida-[DETECTA]->TemperaturaBaja/EnRango/Alta.
         -- Paso 3: Reglas de control candidatas
             -- Se activan las Reglas cuya condición [SI]-> coincide con el estado detectado.
             -- Cada Regla verifica además [REQUIERE_ESTADO] sobre el actuador (p. ej., “CalefactorPrendido”).
@@ -33,7 +33,7 @@
                 -- CONFIANZA en cada regla (0..1): qué tan confiable es la recomendación en ese contexto.
                 -- SEVERIDAD en Estados (opcional, 0..1): impacto relativo de Alta vs. Baja.
             -- Umbral global:
-                -- Monitoreo-[UMBRAL_DECISION]->x: puntaje mínimo para “emitir” la recomendación.
+                -- Corrida-[UMBRAL_DECISION]->x: puntaje mínimo para “emitir” la recomendación.
             -- Cálculo típico (orientativo):
                 -- delta = distancia a límite (ej.: T − Maximo si Alta; Minimo − T si Baja; 0 si EnRango).
                 -- pasa_umbral = delta ≥ UMBRAL_EXCESO/DEFICIT (si aplica).
@@ -44,13 +44,13 @@
                 -- PRIORIDAD para desempatar.
                 -- Las aristas CONFLICTA_CON para no emitir pares opuestos (p. ej., EncenderCalefactor vs. ApagarCalefactor).
         -- Paso 6: Emisión y trazabilidad
-            -- Monitoreo-[RECOMIENDA]->Recomendacion para cada acción aceptada.
+            -- Corrida-[RECOMIENDA]->Recomendacion para cada acción aceptada.
             -- La explicación “por qué” se obtiene recorriendo: Recomendacion ←[PRODUCE] Regla_X ←[SI]/[REQUIERE_ESTADO] (Estado/Actuador) y los comparadores usados con el Rango.
 -- 4. Cómo se usan concretamente los pesos/umbrales
-    -- En el grafo, se agregan propiedades numéricas a Estados, Reglas y Monitoreo:
+    -- En el grafo, se agregan propiedades numéricas a Estados, Reglas y Corrida:
         -- Estado: SEVERIDAD (ej., Alta/Baja 0.8; EnRango 0).
         -- Regla: CONFIANZA, UMBRAL_EXCESO/UMBRAL_DEFICIT (°C) y, si querés, UMBRAL_ABSOLUTO, VENTANA_TIEMPO para persistencia.
-        -- Monitoreo: UMBRAL_DECISION (0..1) como corte global.
+        -- Corrida: UMBRAL_DECISION (0..1) como corte global.
     -- El motor de inferencia lee estos valores para filtrar reglas (por umbral), ponderarlas (por confianza/severidad) y decidir la emisión (por umbral global). Así se reducen falsas alarmas, se jerarquizan acciones y se gana robustez.
 
 Corrida-[TIENE_ETAPA_ACTUAL]->Etapa
@@ -87,12 +87,11 @@ Enfriamiento-[CONFIGURA_TEMPERATURA]->Temp30
 Corrida-[INICIA_CON]->ProcesoTermico
 ProcesoTermico-[PRECEDE_A]->Enfriamiento
 
--- Monitoreo
-Monitoreo-[DE_CORRIDA]->Corrida
-Monitoreo-[DETECTA]->Estado
-Monitoreo-[LEE_TEMPERATURA]->Lectura
-Monitoreo-[DETECTA_ESTADO]->EstadoCalefactor
-Monitoreo-[DETECTA_ESTADO]->EstadoVentilador
+-- Corrida
+Corrida-[DETECTA]->Estado
+Corrida-[LEE_TEMPERATURA]->Lectura
+Corrida-[DETECTA_ESTADO]->EstadoCalefactor
+Corrida-[DETECTA_ESTADO]->EstadoVentilador
 Lectura-[TIENE_VALOR]->TemperaturaInterna
 Lectura-[TIENE_FECHA_HORA]->FechaHora
 
@@ -145,7 +144,7 @@ EncenderVentilador-[TIPO_DE]->Recomendacion
 ApagarVentilador-[TIPO_DE]->Recomendacion
 Mantener-[TIPO_DE]->Recomendacion
 
-Monitoreo-[RECOMIENDA]->Recomendacion
+Corrida-[RECOMIENDA]->Recomendacion
 
 
 -- Verificar si puedo sacar las reglas y dejar solo las recomendaciones
