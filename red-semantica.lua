@@ -82,10 +82,12 @@ Corrida-[DETECTA]->Estado
 Corrida-[LEE_TEMPERATURA]->Lectura
 Corrida-[DETECTA_ESTADO]->EstadoCalefactor
 Corrida-[DETECTA_ESTADO]->EstadoVentilador
-Corrida-[TIENE_LECTURA]->Lectura
+-- Corrida-[TIENE_LECTURA]->Lectura #El historial de lecturas las podemos consumir desde una db externa
 Corrida-[TIENE_TEMPERATURA]->TemperaturaInterna
-Lectura-[TIENE_VALOR]->TemperaturaInterna
-Lectura-[TIENE_FECHA_HORA]->FechaHora
+-- Lectura-[TIENE_VALOR]->TemperaturaInterna
+Corrida-[TIENE_ACTUADORES]->Actuadores
+-- Lectura-[TIENE_FECHA_HORA]->FechaHora
+TemperaturaInterna-[TIENE_TENDENCIA]->Valor
 
 -- Tipos de temperatura
 TemperaturaAlta-[TIPO_DE]->Estado
@@ -175,8 +177,13 @@ Regla_Mantener-[PRIORIDAD]->1
 
 -- recomendaciones contradictorias
 ApagarCalefactor-[CONFLICTA_CON]->EncenderCalefactor
+EncenderCalefactor-[CONFLICTA_CON]->ApagarCalefactor
 ApagarVentilador-[CONFLICTA_CON]->EncenderVentilador
-
+EncenderVentilador-[CONFLICTA_CON]->ApagarVentilador
+Mantener-[CONFLICTA_CON]->ApagarCalefactor
+Mantener-[CONFLICTA_CON]->EncenderCalefactor
+Mantener-[CONFLICTA_CON]->ApagarVentilador
+Mantener-[CONFLICTA_CON]->EncenderVentilador
 
 --Ideas futuras
 --1.Modelar pesos y umbrales como propiedades numéricas en las reglas/estados y un umbral global de decisión en Monitoreo.
