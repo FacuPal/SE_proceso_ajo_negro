@@ -1,76 +1,77 @@
 # 1- Objetivo y alcance
-  - Objetivo: dado una Corrida en cierta Etapa, clasificar la TemperaturaInterna respecto del Rango de esa etapa y, según el estado resultante y los estados de los actuadores, emitir Recomendaciones de control.
-  - Alcance actual: temperatura (diagnóstico de Baja/EnRango/Alta) y acciones sobre Calefactor/Ventilador.
+- Objetivo: dado una Corrida en cierta Etapa, clasificar la TemperaturaInterna respecto del Rango de esa etapa y, según el estado resultante y los estados de los actuadores, emitir Recomendaciones de control.
+- Alcance actual: temperatura (diagnóstico de Baja/EnRango/Alta) y acciones sobre Calefactor/Ventilador.
 # 2- Ontología: piezas clave del dominio
 ## Proceso y etapas
-  - Corrida-[TIENE_ETAPA_ACTUAL]->Etapa.
-  - Cada Etapa-[CONFIGURA_TEMPERATURA]->Rango.
-  - Rango define límites por ValorEsperado y Tolerancia, y sus derivados Minimo y Maximo (ej.: ProcesoTermico con 80 ± 3 → 77..83).
+- Corrida-[TIENE_ETAPA_ACTUAL]->Etapa.
+- Cada Etapa-[CONFIGURA_TEMPERATURA]->Rango.
+- Rango define límites por ValorEsperado y Tolerancia, y sus derivados Minimo y Maximo (ej.: ProcesoTermico con 80 ± 3 → 77..83).
 
 ## Medición y diagnóstico
-  - Corrida-[TIENE_TEMPERATURA]->TemperaturaInterna.
-  - Estados de temperatura: TemperaturaBaja, TemperaturaEnRango, TemperaturaAlta.
-  - Reglas (comparadores): 
-      - TemperaturaInterna-[SI_ES]->Menor/Entre/Mayor
-      - Menor/Entre/Mayor-[QUE]->Rango; 
-      - Menor/Entre/Mayor-[PRODUCE]->Estado.
+- Corrida-[TIENE_TEMPERATURA]->TemperaturaInterna.
+- Estados de temperatura: TemperaturaBaja, TemperaturaEnRango, TemperaturaAlta.
+- Reglas (comparadores): 
+    - TemperaturaInterna-[SI_ES]->Menor/Entre/Mayor
+    - Menor/Entre/Mayor-[QUE]->Rango; 
+    - Menor/Entre/Mayor-[PRODUCE]->Estado.
 
-    _Nota:_ Interpretación práctica: Menor ≡ T < Minimo; Entre ≡ Minimo < T < Maximo; Mayor ≡ T > Maximo.
+  _Nota:_ Interpretación práctica: Menor ≡ T < Minimo; Entre ≡ Minimo < T < Maximo; Mayor ≡ T > Maximo.
 ## Actuadores y recomendaciones
-  - Calefactor y Ventilador son Actuadores con EstadoActuador (Prendido/Apagado) y CapacidadTermica (efecto sobre la temperatura).
-  - Recomendaciones: Encender/Apagar cada actuador, Mantener. Se activan mediante la ejecución de las reglas de control: 
-    - Recomendación-[REQUIER]->EstadoTemperatura 
-    - Recomendación-[REQUIERE]->(estado de actuador), 
-    - Recomendación-[TIENE]->PRIORIDAD.
+- Calefactor y Ventilador son Actuadores con EstadoActuador (Prendido/Apagado) y CapacidadTermica (efecto sobre la temperatura).
+- Recomendaciones: Encender/Apagar cada actuador, Mantener. Se activan mediante la ejecución de las reglas de control: 
+  - Recomendación-[REQUIER]->EstadoTemperatura 
+  - Recomendación-[REQUIERE]->(estado de actuador), 
+  - Recomendación-[TIENE]->PRIORIDAD.
 
 # 3. Flujo de inferencia (paso a paso)
-  ## Paso 1: Rango activo
-  A partir de la instanciación de la corrida: 
-  - Corrida-[TIENE_ETAPA_ACTUAL]->Etapa 
-  - Etapa-[CONFIGURA_TEMPERATURA]->Rango
+## Paso 1: Rango activo
+A partir de la instanciación de la corrida: 
+- Corrida-[TIENE_ETAPA_ACTUAL]->Etapa 
+- Etapa-[CONFIGURA_TEMPERATURA]->Rango
 
-  El motor selecciona el Rango vigente (Minimo/Maximo) para evaluar la temperatura.
+El motor selecciona el Rango vigente (Minimo/Maximo) para evaluar la temperatura.
 
-  ## Paso 2: Estado de temperatura
-  La Corrida obtiene TemperaturaInterna y la clasifica ejecutando las reglas lógicas Menor/Entre/Mayor comparándolas con el Rango.
-  
-  __Resultado:__ Corrida-[DETECTA]->TemperaturaBaja/EnRango/Alta.
+## Paso 2: Estado de temperatura
+La Corrida obtiene TemperaturaInterna y la clasifica ejecutando las reglas lógicas Menor/Entre/Mayor comparándolas con el Rango.
 
-  ## Paso 3: Reglas de control candidatas
-  Se activan las Reglas cuya condición [REQUIERE]-> coincide con el estado detectado.
-  Cada Regla verifica además [REQUIERE] sobre el actuador (p. ej., “CalefactorPrendido”).
+__Resultado:__ Corrida-[DETECTA]->TemperaturaBaja/EnRango/Alta.
 
-  ## Paso 4: Pesos y umbrales (Si es que lo implementamos)
-  ### Umbrales locales por regla:
-    UMBRAL_EXCESO: exceso mínimo sobre Maximo para considerar reglas de “Alta”.
-    UMBRAL_DEFICIT: déficit mínimo bajo Minimo para “Baja”.
-  ### Pesos:
-    CONFIANZA en cada regla (0..1): qué tan confiable es la recomendación en ese contexto.
-    SEVERIDAD en Estados (opcional, 0..1): impacto relativo de Alta vs. Baja.
-  ### Umbral global:
-      Corrida-[UMBRAL_DECISION]->x: puntaje mínimo para “emitir” la recomendación.
-  ### Forma de cálculo (Orientativo):
-      delta = distancia a límite (ej.: T − Maximo si Alta; Minimo − T si Baja; 0 si EnRango).
-      pasa_umbral = delta ≥ UMBRAL_EXCESO/DEFICIT (si aplica).
-      puntaje_regla = CONFIANZA_regla × SEVERIDAD_estado × f(delta) donde f(delta) puede ser, por ejemplo, min(1, delta/escala).
-      Emitir si puntaje_regla ≥ UMBRAL_DECISION.
+## Paso 3: Reglas de control candidatas
+Se activan las Reglas cuya condición [REQUIERE]-> coincide con el estado detectado.
+Cada Regla verifica además [REQUIERE] sobre el actuador (p. ej., “CalefactorPrendido”).
 
-  ## Paso 5: Resolución de conflictos y priorización
-  Si varias reglas producen acciones incompatibles, usar:
-  - PRIORIDAD para desempatar.
-  - Las aristas CONFLICTA_CON para no emitir pares opuestos (p. ej., EncenderCalefactor vs. ApagarCalefactor).
+## Paso 4: Pesos y umbrales (Si es que lo implementamos)
+### Umbrales locales por regla:
+  UMBRAL_EXCESO: exceso mínimo sobre Maximo para considerar reglas de “Alta”.
+  UMBRAL_DEFICIT: déficit mínimo bajo Minimo para “Baja”.
+### Pesos:
+  CONFIANZA en cada regla (0..1): qué tan confiable es la recomendación en ese contexto.
+  SEVERIDAD en Estados (opcional, 0..1): impacto relativo de Alta vs. Baja.
+### Umbral global:
+    Corrida-[UMBRAL_DECISION]->x: puntaje mínimo para “emitir” la recomendación.
+### Forma de cálculo (Orientativo):
+    delta = distancia a límite (ej.: T − Maximo si Alta; Minimo − T si Baja; 0 si EnRango).
+    pasa_umbral = delta ≥ UMBRAL_EXCESO/DEFICIT (si aplica).
+    puntaje_regla = CONFIANZA_regla × SEVERIDAD_estado × f(delta) donde f(delta) puede ser, por ejemplo, min(1, delta/escala).
+    Emitir si puntaje_regla ≥ UMBRAL_DECISION.
 
-  ## Paso 6: Emisión y trazabilidad
-  Una vez evaluadas las recomendaciones, estas son asignadas a la corrida por medi de la relación Corrida-[RECOMIENDA]->Recomendacion para cada acción aceptada.
-  La explicación “por qué” se obtiene recorriendo las relaciones [REQUERE] de la recomendación y los comparadores usados con el Rango.
+## Paso 5: Resolución de conflictos y priorización
+Si varias reglas producen acciones incompatibles, usar:
+- PRIORIDAD para desempatar.
+- Las aristas CONFLICTA_CON para no emitir pares opuestos (p. ej., EncenderCalefactor vs. ApagarCalefactor).
+
+## Paso 6: Emisión y trazabilidad
+Una vez evaluadas las recomendaciones, estas son asignadas a la corrida por medi de la relación Corrida-[RECOMIENDA]->Recomendacion para cada acción aceptada.
+
+La explicación “por qué” se obtiene recorriendo las relaciones [REQUERE] de la recomendación y los comparadores usados con el Rango.
  
  # 4. Cómo se usan concretamente los pesos/umbrales (Si se implementan)
-  En el grafo, se agregan propiedades numéricas a Estados, Reglas y Corrida:
-  - Estado: SEVERIDAD (ej., Alta/Baja 0.8; EnRango 0).
-  - Regla: CONFIANZA, UMBRAL_EXCESO/UMBRAL_DEFICIT (°C) y, si querés, UMBRAL_ABSOLUTO, VENTANA_TIEMPO para persistencia.
-  - Corrida: UMBRAL_DECISION (0..1) como corte global.
+En el grafo, se agregan propiedades numéricas a Estados, Reglas y Corrida:
+- Estado: SEVERIDAD (ej., Alta/Baja 0.8; EnRango 0).
+- Regla: CONFIANZA, UMBRAL_EXCESO/UMBRAL_DEFICIT (°C) y, si querés, UMBRAL_ABSOLUTO, VENTANA_TIEMPO para persistencia.
+- Corrida: UMBRAL_DECISION (0..1) como corte global.
 
-  El motor de inferencia lee estos valores para filtrar reglas (por umbral), ponderarlas (por confianza/severidad) y decidir la emisión (por umbral global). Así se reducen falsas alarmas, se jerarquizan acciones y se gana robustez.
+El motor de inferencia lee estos valores para filtrar reglas (por umbral), ponderarlas (por confianza/severidad) y decidir la emisión (por umbral global). Así se reducen falsas alarmas, se jerarquizan acciones y se gana robustez.
 
 # Red semántica 
 
