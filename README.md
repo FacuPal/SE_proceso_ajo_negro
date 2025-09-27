@@ -258,6 +258,24 @@ Mantener -- "CONFLICTA_CON" --> ApagarVentilador
 Mantener -- "CONFLICTA_CON" --> EncenderVentilador
 ```
 
+# Lógica difusa
+La temperaturaInterna va a tener grados de pertenencia a los 3 estados:
+- TemperaturaAlta
+- TemperaturaEnRango
+- TemperaturaBaja
+
+Los a y b los guardamos en las configuraciones de las etapas (porque dependen de la etapa actual).+
+
+El estado de los actuadores (Encendido y Apagado) pasa a ser nivel de pertenencia, por lo que cada actuador tendrá grado de pertenencia a:
+- Encendido
+- Apagado
+
+El nivel de pertenencia se podría calcular en base a las tendencia de la variable de temperatura. Se guardan a y b en cada estado, y en base al valor de la tendencia (que se podría aplicar un demonio if-modified o if-added para consultarlo de una db o simulación externa) se evalúa el nivel de pertenencia.
+
+Las reglas se deberán modificar, aplicando lógica difusa para la evaluación de las condiciones Max(u, v) para los AND.
+
+
+
 # Ideas futuras
 ## 1.Modelar pesos y umbrales como propiedades numéricas en las reglas/estados y un umbral global de decisión en Monitoreo.
 - Rango activo: obtener Minimo/Maximo de la Etapa actual de la Corrida.
