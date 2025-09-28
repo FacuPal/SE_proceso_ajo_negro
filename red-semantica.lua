@@ -88,32 +88,27 @@ Corrida-[RECOMIENDA]->Recomendacion
 
 -- Reglas de control
 -- Si temperatura alta y calefactor prendido => ApagarCalefactor
-ApagarCalefactor-[REQUIERE]->TemperaturaAlta
+ApagarCalefactor-[REQUIERE]->TemperaturaEnRango
 ApagarCalefactor-[REQUIERE]->CalefactorPrendido
-ApagarCalefactor-[PRODUCE]->ApagarCalefactor
 ApagarCalefactor-[PRIORIDAD]->10
 
 -- Si temperatura alta y ventilador apagado => EncenderVentilador
 EncenderVentilador-[REQUIERE]->TemperaturaAlta
 EncenderVentilador-[REQUIERE]->VentiladorApagado
-EncenderVentilador-[PRODUCE]->EncenderVentilador
 EncenderVentilador-[PRIORIDAD]->9
 
 -- Si temperatura baja y calefactor apagado => EncenderCalefactor
 EncenderCalefactor-[REQUIERE]->TemperaturaBaja
 EncenderCalefactor-[REQUIERE]->CalefactorApagado
-EncenderCalefactor-[PRODUCE]->EncenderCalefactor
 EncenderCalefactor-[PRIORIDAD]->9
 
 -- Si temperatura baja y ventilador prendido => ApagarVentilador
-ApagarVentilador-[REQUIERE]->TemperaturaBaja
+ApagarVentilador-[REQUIERE]->TemperaturaEnRango
 ApagarVentilador-[REQUIERE]->VentiladorPrendido
-ApagarVentilador-[PRODUCE]->ApagarVentilador
 ApagarVentilador-[PRIORIDAD]->8
 
 -- Si temperatura en rango => Mantener (sin cambios)
 Mantener-[REQUIERE]->TemperaturaEnRango
-Mantener-[PRODUCE]->Mantener
 Mantener-[PRIORIDAD]->1
 
 -- recomendaciones contradictorias
