@@ -216,3 +216,55 @@ Esta funcionalidad podría podría modelarse como una métrica que, a partir de 
   ``` 
 
 ## 3.Enriquecer el control térmico con histéresis, persistencia, límites de seguridad y manejo de sensor.
+
+
+
+# Iniciar Neo4J
+```
+  docker run \
+    -p 7474:7474 -p 7687:7687 \
+    -v $PWD/neo4j/data:/data -v $PWD/neo4j/plugins:/plugins \
+    --name neo4j-apoc \
+    -e NEO4J_AUTH=none \
+    -e NEO4J_apoc_export_file_enabled=true \
+    -e NEO4J_apoc_import_file_enabled=true \
+    -e NEO4J_dbms_transaction_timeout="10s" \
+    -e NEO4J_apoc_trigger_enabled=true \
+    -e NEO4J_apoc_import_file_use___neo4j___config=true \
+    -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
+    neo4j:4.4-community
+
+``` 
+
+// Crear una instancia de corrida
+// Match FrameClass
+MATCH (c:FrameClass {name: 'Corrida'}), (t:FrameClass {name: 'Temperatura'})
+// Match Slots
+MATCH (sTemp:Slot {name: 'temperaturaInterna'}), (sValor:Slot {name: 'valor'}), (sEtAct:Slot {name: 'etapaActual'})
+// Match Instances
+MATCH (prot:Etapa {id: 'proceso_termico'}), (enf:Etapa {id: 'enfriamiento'})
+MERGE (t)<-[:INSTANCE_OF]-(ti:FrameInstance {id: 'temperatura_interna_corrida_1'})-[:HAS_VALUE {slot: 'valor', value: 82.0}]->(sValor)
+MERGE (c)<-[:INSTANCE_OF]-(ci:FrameInstance:Corrida {id: '1'})-[:HAS_VALUE {slot: 'temperaturaInterna', value: ti.id}]->(sTemp)
+MERGE (ci)-[:HAS_VALUE {slot: 'etapaActual', value: prot.id}]->(sEtAct)
+
+
+
+// Match FrameClass
+MATCH (c:FrameClass {name: 'Corrida'}), (t:FrameClass {name: 'Temperatura'})
+// Match Slots
+MATCH (sTemp:Slot {name: 'temperaturaInterna'}), (sValor:Slot {name: 'valor'}), (sEtAct:Slot {name: 'etapaActual'})
+// Match Instances
+MATCH (prot:Etapa {id: 'proceso_termico'}), (enf:Etapa {id: 'enfriamiento'})
+MERGE (t)<-[:INSTANCE_OF]-(ti:FrameInstance {id: 'temperatura_interna_corrida_2'})-[:HAS_VALUE {slot: 'valor', value: 36.0}]->(sValor)
+MERGE (c)<-[:INSTANCE_OF]-(ci:FrameInstance:Corrida {id: '2'})-[:HAS_VALUE {slot: 'temperaturaInterna', value: ti.id}]->(sTemp)
+MERGE (ci)-[:HAS_VALUE {slot: 'etapaActual', value: enf.id}]->(sEtAct)
+
+
+// Inferir temperatura y estado
+WITH 1 as corridaId
+MATCH (c:FrameInstance:Corrida)-[rid:HAS_VALUE {slot:'id'}]->(:Slot {name:'id'})
+WHERE toInteger(rid.value) = toInteger(corridaId)
+MATCH (c)-[:TIENE_TEMPERATURA]->(t:FrameInstance:Temperatura)
+OPTIONAL MATCH (t)-[rv:HAS_VALUE {slot:'valor'}]->(:Slot {name:'valor'})
+OPTIONAL MATCH (t)-[re:HAS_VALUE {slot:'estado'}]->(:Slot {name:'estado'})
+RETURN toInteger(rid.value) AS corridaId, t.id AS temperaturaId, rv.value AS valor, re.value AS estado
