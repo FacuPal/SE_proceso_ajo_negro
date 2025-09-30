@@ -32,7 +32,6 @@ end
 
 subgraph SG_MEDICION["Medición / Variables"]
   Lectura["Lectura"]
-  TemperaturaInterna["TemperaturaInterna"]
   Ts["Timestamp"]
   Tendencia["Tendencia"]
   TMayor["Mayor"]
@@ -108,15 +107,13 @@ Enfriamiento -- "CONFIGURA_TEMPERATURA" --> Temp30
 %% ================== MEDICIÓN / CORRIDA ==================
 Corrida -- "DETECTA" --> Estado
 Corrida -- "DETECTA_ESTADO" --> ActuadorPrendido
-Corrida -- "TIENE_TEMPERATURA" --> TemperaturaInterna
+Corrida -- "ULTIMA_LECTURA" --> Lectura
 Corrida -- "TIENE_ACTUADORES" --> Actuador
-TemperaturaInterna -- "TIENE_TENDENCIA" --> Tendencia
 Lectura -- "TIENE_FECHA_HORA" --> Ts
+Lectura -- "TIENE_ESTADO" --> Estado
 Lectura -- "PERTENECE_A" --> Corrida
 Lectura -- "REALIZADA_EN_ETAPA" --> Etapa
 Lectura -- "TIENE_TENDENCIA" --> Tendencia
-TemperaturaInterna -- "LEIDA_EN" --> Lectura
-TemperaturaInterna -- "TIENE_FECHA_HORA" --> Ts
 Tendencia -- "SI_ES" --> TMayor
 T30 -- "A" --> TMayor
 Tendencia -- "SI_ES" --> TMenor
@@ -130,22 +127,22 @@ TemperaturaAlta -- "TIPO_DE" --> Estado
 TemperaturaBaja -- "TIPO_DE" --> Estado
 TemperaturaEnRango -- "TIPO_DE" --> Estado
 
-TemperaturaInterna -- "SI_ES" --> Menor
+Lectura -- "SI_ES" --> Menor
 Menor -- "QUE" --> Rango
 Menor -- "PRODUCE" --> TemperaturaBaja
 
-TemperaturaInterna -- "SI_ES" --> Entre
+Lectura -- "SI_ES" --> Entre
 Entre -- "QUE" --> Rango
 Entre -- "PRODUCE" --> TemperaturaEnRango
 
-TemperaturaInterna -- "SI_ES" --> Mayor
+Lectura -- "SI_ES" --> Mayor
 Mayor -- "QUE" --> Rango
 Mayor -- "PRODUCE" --> TemperaturaAlta
 
 %% ================== ACTUADORES ==================
 Actuador -- "ESTA_ACTIVO" --> ActuadorPrendido
 Actuador -- "TIENE_CAPACIDAD" --> CapacidadTermica
-CapacidadTermica -- "AFECTA" --> TemperaturaInterna
+CapacidadTermica -- "AFECTA" --> Lectura
 ActuadorPrendido -- "DEPENDE_DE" --> CapacidadTermica
 ActuadorPrendido -- "DEPENDE_DE" --> Tendencia
 
