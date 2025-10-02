@@ -146,8 +146,7 @@ MERGE (dActMinMax:Daemon {name:'actualizarMinimoMaximo'})
 MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
 MERGE (dUpdTemp:Daemon {name:'actualizarTemperatura'})
 MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
-MERGE (dEvalIncendio:Daemon {name:'evaluarAlertaIncendio'})
-MERGE (dEvalPuertaAbierta:Daemon {name:'evaluarAlertaPuertaAbierta'})
+MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
 MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
 MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
 
@@ -160,7 +159,7 @@ MERGE (slTolerancia)-[ModificaTolerancia:IF_MODIFIED]->(dActMinMax)
   ON CREATE SET ModificaTolerancia.ts = datetime(), ModificaTolerancia.source='seed'
   ON MATCH  SET ModificaTolerancia.ts = datetime()
 
-MERGE (slActuadorActivo)-[ModificaActivoActuador:IF_MODIFIED]->(dUpdEstadoActuador)
+MERGE (slActuadorActivo)-[ModificaActivoActuador:IF_NEEDED]->(dUpdEstadoActuador)
   ON CREATE SET ModificaActivoActuador.ts = datetime(), ModificaActivoActuador.source='seed'
   ON MATCH  SET ModificaActivoActuador.ts = datetime()
 
@@ -172,37 +171,29 @@ MERGE (slTempInt)-[AgregaValor:IF_ADDED]->(dUpdEstadoTemp)
   ON CREATE SET AgregaValor.ts = datetime(), AgregaValor.source='seed'
   ON MATCH  SET AgregaValor.ts = datetime()
 
-MERGE (slEtapaActual)-[ModificaEtapa:IF_MODIFIED]->(dUpdEstadoTemp)
-  ON CREATE SET ModificaEtapa.ts = datetime(), ModificaEtapa.source='seed'
-  ON MATCH  SET ModificaEtapa.ts = datetime()
+MERGE (slUltimaLectura)-[AgregaTendenciaAct:IF_ADDED]->(dUpdEstadoActuador)
+  ON CREATE SET AgregaTendenciaAct.ts = datetime(), AgregaTendenciaAct.source='seed'
+  ON MATCH  SET AgregaTendenciaAct.ts = datetime()
 
-MERGE (slTendencia)-[AgregaTendenciaInc:IF_ADDED]->(dEvalIncendio)
-  ON CREATE SET AgregaTendenciaInc.ts = datetime(), AgregaTendenciaInc.source='seed'
-  ON MATCH  SET AgregaTendenciaInc.ts = datetime()
-
-MERGE (slTendencia)-[AgregaTendenciaPA:IF_ADDED]->(dEvalPuertaAbierta)
+MERGE (slUltimaLectura)-[AgregaTendenciaPA:IF_ADDED]->(dEvalAlertas)
   ON CREATE SET AgregaTendenciaPA.ts = datetime(), AgregaTendenciaPA.source='seed'
   ON MATCH  SET AgregaTendenciaPA.ts = datetime()
-
-MERGE (slTendencia)-[ModificaTendenciaAct:IF_ADDED]->(dUpdEstadoActuador)
-  ON CREATE SET ModificaTendenciaAct.ts = datetime(), ModificaTendenciaAct.source='seed'
-  ON MATCH  SET ModificaTendenciaAct.ts = datetime()
+  
+MERGE (slUltimaLectura)-[ModificaUltimaLectura:IF_MODIFIED]->(dEvalRecomendaciones)
+  ON CREATE SET ModificaUltimaLectura.ts = datetime(), ModificaUltimaLectura.source='seed'
+  ON MATCH  SET ModificaUltimaLectura.ts = datetime()
 
 MERGE (slRecomendaciones)-[ModificaRecs:IF_MODIFIED]->(dEvalPrioridadRec)
   ON CREATE SET ModificaRecs.ts = datetime(), ModificaRecs.source='seed'
   ON MATCH  SET ModificaRecs.ts = datetime()
 
-MERGE (slUltimaLectura)-[ModificaUltimaLectura:IF_MODIFIED]->(dEvalPrioridadRec)
-  ON CREATE SET ModificaUltimaLectura.ts = datetime(), ModificaUltimaLectura.source='seed'
-  ON MATCH  SET ModificaUltimaLectura.ts = datetime()
 
 MERGE (dActMinMax)-[:UPDATES]->(slMaximo)
 MERGE (dActMinMax)-[:UPDATES]->(slMinimo)
 MERGE (dUpdEstadoActuador)-[:UPDATES]->(slActuadorActivo)
 MERGE (dUpdTemp)-[:UPDATES]->(slUltimaLectura)
 MERGE (dUpdEstadoTemp)-[:UPDATES]->(slEstado)
-MERGE (dEvalIncendio)-[:UPDATES]->(slAlertas)
-MERGE (dEvalPuertaAbierta)-[:UPDATES]->(slAlertas)
+MERGE (dEvalAlertas)-[:UPDATES]->(slAlertas)
 MERGE (dEvalPrioridadRec)-[:UPDATES]->(slRecomendaciones)
 MERGE (dEvalRecomendaciones)-[:UPDATES]->(slRecomendaciones)
 
@@ -292,6 +283,7 @@ MERGE (recM)-[:CONFLICTA_CON]->(recEC)
 MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 // ===================== Triggers =====================
+// MERGE (dActMinMax:Daemon {name:'actualizarMinimoMaximo'})
 // Trigger para actualizar minimo y maximo al cambiar VE o Tol en un Rango
 CALL apoc.trigger.add('actualizarMinimoMaximo',
   "
@@ -342,6 +334,12 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 
 ",{phase:'after'});
 
-
+// MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
+// MERGE (dUpdTemp:Daemon {name:'actualizarTemperatura'})
+// MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
+// MERGE (dEvalIncendio:Daemon {name:'evaluarAlertaIncendio'})
+// MERGE (dEvalPuertaAbierta:Daemon {name:'evaluarAlertaPuertaAbierta'})
+// MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
+// MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
 
 // trigger para asegurar que solo haya una corrida activa (sin fechaFin)
