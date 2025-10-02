@@ -178,7 +178,7 @@ MERGE (slUltimaLectura)-[AgregaTendenciaAct:IF_ADDED]->(dUpdEstadoActuador)
 MERGE (slUltimaLectura)-[AgregaTendenciaPA:IF_ADDED]->(dEvalAlertas)
   ON CREATE SET AgregaTendenciaPA.ts = datetime(), AgregaTendenciaPA.source='seed'
   ON MATCH  SET AgregaTendenciaPA.ts = datetime()
-  
+
 MERGE (slUltimaLectura)-[ModificaUltimaLectura:IF_MODIFIED]->(dEvalRecomendaciones)
   ON CREATE SET ModificaUltimaLectura.ts = datetime(), ModificaUltimaLectura.source='seed'
   ON MATCH  SET ModificaUltimaLectura.ts = datetime()
@@ -283,6 +283,23 @@ MERGE (recM)-[:CONFLICTA_CON]->(recEC)
 MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 // ===================== Triggers =====================
+// trigger para asegurar que solo haya una corrida activa (sin fechaFin)
+CALL apoc.trigger.add('unaCorridaActiva',
+  "
+    UNWIND coalesce($createdNodes, []) AS node
+    WITH node
+    WHERE node:Corrida AND NOT (node)-[:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
+
+    // Buscar otras corridas activas (sin fechaFin) distintas a la creada
+    MATCH (other:Corrida)
+    WHERE other <> node AND NOT (other)-[:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
+
+    // Devolver un error si se encuentra alguna
+    WITH collect(other) AS otrasCorridas
+    CALL apoc.util.validate(size(otrasCorridas) > 0, 'Error: Solo puede haber una Corrida activa (sin fechaFin).', [])
+    RETURN count(otrasCorridas) AS numOtrasCorridas
+    ", {phase:'before'});
+
 // MERGE (dActMinMax:Daemon {name:'actualizarMinimoMaximo'})
 // Trigger para actualizar minimo y maximo al cambiar VE o Tol en un Rango
 CALL apoc.trigger.add('actualizarMinimoMaximo',
@@ -337,9 +354,8 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
 // MERGE (dUpdTemp:Daemon {name:'actualizarTemperatura'})
 // MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
-// MERGE (dEvalIncendio:Daemon {name:'evaluarAlertaIncendio'})
-// MERGE (dEvalPuertaAbierta:Daemon {name:'evaluarAlertaPuertaAbierta'})
+// MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
 // MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
 // MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
 
-// trigger para asegurar que solo haya una corrida activa (sin fechaFin)
+
