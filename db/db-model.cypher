@@ -4,6 +4,8 @@ CREATE CONSTRAINT frame_instance_constraint IF NOT EXISTS FOR (i:FrameInstance) 
 CREATE CONSTRAINT slot_constraint IF NOT EXISTS FOR (s:Slot) REQUIRE s.name IS UNIQUE;
 CREATE CONSTRAINT slot_constraint IF NOT EXISTS FOR (s:Slot) REQUIRE s.name IS UNIQUE;
 CREATE INDEX daemon_index IF NOT EXISTS FOR (d:Daemon) ON (d.name);
+// Borrar triggers existentes (si los hay)
+CALL apoc.trigger.removeAll();
 
 // ===================== Clases (FrameClass) =====================
 MERGE (Rango:FrameClass {name:'Rango'})
@@ -21,6 +23,7 @@ MERGE (slName:Slot {name:'name'})
 // MERGE (slId:Slot {name:'id'})
 MERGE (slTs:Slot {name:'ts'})
 
+
 // Rango
 MERGE (slValorEsperado:Slot {name:'valorEsperado'})
 MERGE (slTolerancia:Slot {name:'tolerancia'})
@@ -33,7 +36,7 @@ MERGE (slConfigTemp:Slot {name:'configuracionTemperatura'})
 
 // Actuador
 MERGE (slCapacidad:Slot {name:'capacidad'})
-MERGE (slActivo:Slot {name:'activo'})
+MERGE (slActuadorActivo:Slot {name:'activo'})
 
 // Lectura
 MERGE (slTempInt:Slot {name:'temperaturaInterna'})
@@ -53,8 +56,8 @@ MERGE (slActuadores:Slot {name:'actuadores'})
 MERGE (slUltimaLectura:Slot {name:'ultimaLectura'})
 
 // Alerta
-MERGE (slActiva:Slot {name:'activa'})
 MERGE (slExplicacion:Slot {name:'explicacion'})
+MERGE (slActivo:Slot {name:'activo'})
 
 // Recomendacion
 MERGE (slPrioridad:Slot {name:'prioridad'})
@@ -76,7 +79,7 @@ MERGE (Etapa)-[:HAS_SLOT {type:'Rango',   cardinality:'1',   required:true}]->(s
 // Actuador
 MERGE (Actuador)-[:HAS_SLOT {type:'string',  cardinality:'1', required:true}]->(slName)
 MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slCapacidad)
-MERGE (Actuador)-[:HAS_SLOT {type:'boolean', cardinality:'1', required:true}]->(slActivo)
+MERGE (Actuador)-[:HAS_SLOT {type:'boolean', cardinality:'1', required:true}]->(slActuadorActivo)
 
 // Lectura
 MERGE (Lectura)-[:HAS_SLOT {type:'string',     cardinality:'1',   required:true}]->(slName)
@@ -101,7 +104,7 @@ MERGE (Corrida)-[:HAS_SLOT {type:'Lectura',     cardinality:'1',   required:true
 // Alerta
 MERGE (Alerta)-[:HAS_SLOT {type:'string',   cardinality:'1', required:true}]->(slName)
 MERGE (Alerta)-[:HAS_SLOT {type:'datetime', cardinality:'1', required:true}]->(slTs)
-MERGE (Alerta)-[:HAS_SLOT {type:'boolean',  cardinality:'1', required:true}]->(slActiva)
+MERGE (Alerta)-[:HAS_SLOT {type:'boolean',  cardinality:'1', required:true}]->(slActivo)
 MERGE (Alerta)-[:HAS_SLOT {type:'string',   cardinality:'1', required:true}]->(slExplicacion)
 
 // Recomendacion
@@ -109,7 +112,7 @@ MERGE (Recomendacion)-[:HAS_SLOT {type:'string',   cardinality:'1', required:tru
 // MERGE (Recomendacion)-[:HAS_SLOT {type:'datetime', cardinality:'1', required:true}]->(slTs)
 // MERGE (Recomendacion)-[:HAS_SLOT {type:'boolean',  cardinality:'1', required:true}]->(slActiva)
 MERGE (Recomendacion)-[:HAS_SLOT {type:'integer',  cardinality:'1', required:true}]->(slPrioridad)
-MERGE (Recomendacion)-[:HAS_SLOT {type:'list[Recomendacion]', cardinality:'0..N', required:true}]->(slConflictaCon)
+MERGE (Recomendacion)-[:HAS_SLOT {type:'list[Recomendacion]', cardinality:'0..N', required:false}]->(slConflictaCon)
 
 // ===================== Clases derivadas simples (tipos específicos) =====================
 // PuertaAbierta e Incendio (frames typeof Alerta). Se modelan como clases específicas.
@@ -118,21 +121,106 @@ MERGE (Incendio:FrameClass {name:'Incendio'})
 MERGE (PuertaAbierta)-[:SUBCLASS_OF]->(Alerta)
 MERGE (Incendio)-[:SUBCLASS_OF]->(Alerta)
 
+// ===================== Defaults =====================
+MERGE (Actuador)-[:DEFAULT {slot:'activo', value:false}]->(slActuadorActivo)
+
+MERGE (Lectura)-[:DEFAULT {slot:'estado', value:'TemperaturaEnRango'}]->(slEstado)
+MERGE (Lectura)-[:DEFAULT {slot:'ts', value:'datetime()'}]->(slTs)
+MERGE (Lectura)-[:DEFAULT {slot:'tendencia', value:0.0}]->(slTendencia)
+
+MERGE (Corrida)-[:DEFAULT {slot:'fechaInicio', value:'datetime()'}]->(slFechaInicio)
+MERGE (Corrida)-[:DEFAULT {slot:'etapaActual', value:'proceso_termico'}]->(slEtapaActual)
+MERGE (Corrida)-[:DEFAULT {slot:'actuadores', value:['calefactor', 'ventilador']}]->(slActuadores)
+
+MERGE (Alerta)-[:DEFAULT {slot:'ts', value:'datetime()'}]->(slTs)
+MERGE (Alerta)-[:DEFAULT {slot:'activo', value:true}]->(slActivo)
+
+MERGE (PuertaAbierta)-[:DEFAULT {slot:'name', value:'PuertaAbierta'}]->(slName)
+
+MERGE (Incendio)-[:DEFAULT {slot:'name', value:'Incendio'}]->(slName)
+
+MERGE (Recomendacion)-[:DEFAULT {slot:'prioridad', value:1}]->(slPrioridad)
+
+// ===================== Demonios =====================
+MERGE (dActMinMax:Daemon {name:'actualizarMinimoMaximo'})
+MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
+MERGE (dUpdTemp:Daemon {name:'actualizarTemperatura'})
+MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
+MERGE (dEvalIncendio:Daemon {name:'evaluarAlertaIncendio'})
+MERGE (dEvalPuertaAbierta:Daemon {name:'evaluarAlertaPuertaAbierta'})
+MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
+MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
+
+// Enlaces Slot -> Daemon
+MERGE (slValorEsperado)-[ModificaValor:IF_MODIFIED]->(dActMinMax)
+  ON CREATE SET ModificaValor.ts = datetime(), ModificaValor.source='seed'
+  ON MATCH  SET ModificaValor.ts = datetime()
+
+MERGE (slTolerancia)-[ModificaTolerancia:IF_MODIFIED]->(dActMinMax)
+  ON CREATE SET ModificaTolerancia.ts = datetime(), ModificaTolerancia.source='seed'
+  ON MATCH  SET ModificaTolerancia.ts = datetime()
+
+MERGE (slActuadorActivo)-[ModificaActivoActuador:IF_MODIFIED]->(dUpdEstadoActuador)
+  ON CREATE SET ModificaActivoActuador.ts = datetime(), ModificaActivoActuador.source='seed'
+  ON MATCH  SET ModificaActivoActuador.ts = datetime()
+
+MERGE (slTempInt)-[ModificaTemp:IF_ADDED]->(dUpdTemp)
+  ON CREATE SET ModificaTemp.ts = datetime(), ModificaTemp.source='seed'
+  ON MATCH  SET ModificaTemp.ts = datetime()
+
+MERGE (slTempInt)-[AgregaValor:IF_ADDED]->(dUpdEstadoTemp)
+  ON CREATE SET AgregaValor.ts = datetime(), AgregaValor.source='seed'
+  ON MATCH  SET AgregaValor.ts = datetime()
+
+MERGE (slEtapaActual)-[ModificaEtapa:IF_MODIFIED]->(dUpdEstadoTemp)
+  ON CREATE SET ModificaEtapa.ts = datetime(), ModificaEtapa.source='seed'
+  ON MATCH  SET ModificaEtapa.ts = datetime()
+
+MERGE (slTendencia)-[AgregaTendenciaInc:IF_ADDED]->(dEvalIncendio)
+  ON CREATE SET AgregaTendenciaInc.ts = datetime(), AgregaTendenciaInc.source='seed'
+  ON MATCH  SET AgregaTendenciaInc.ts = datetime()
+
+MERGE (slTendencia)-[AgregaTendenciaPA:IF_ADDED]->(dEvalPuertaAbierta)
+  ON CREATE SET AgregaTendenciaPA.ts = datetime(), AgregaTendenciaPA.source='seed'
+  ON MATCH  SET AgregaTendenciaPA.ts = datetime()
+
+MERGE (slTendencia)-[ModificaTendenciaAct:IF_ADDED]->(dUpdEstadoActuador)
+  ON CREATE SET ModificaTendenciaAct.ts = datetime(), ModificaTendenciaAct.source='seed'
+  ON MATCH  SET ModificaTendenciaAct.ts = datetime()
+
+MERGE (slRecomendaciones)-[ModificaRecs:IF_MODIFIED]->(dEvalPrioridadRec)
+  ON CREATE SET ModificaRecs.ts = datetime(), ModificaRecs.source='seed'
+  ON MATCH  SET ModificaRecs.ts = datetime()
+
+MERGE (slUltimaLectura)-[ModificaUltimaLectura:IF_MODIFIED]->(dEvalPrioridadRec)
+  ON CREATE SET ModificaUltimaLectura.ts = datetime(), ModificaUltimaLectura.source='seed'
+  ON MATCH  SET ModificaUltimaLectura.ts = datetime()
+
+MERGE (dActMinMax)-[:UPDATES]->(slMaximo)
+MERGE (dActMinMax)-[:UPDATES]->(slMinimo)
+MERGE (dUpdEstadoActuador)-[:UPDATES]->(slActuadorActivo)
+MERGE (dUpdTemp)-[:UPDATES]->(slUltimaLectura)
+MERGE (dUpdEstadoTemp)-[:UPDATES]->(slEstado)
+MERGE (dEvalIncendio)-[:UPDATES]->(slAlertas)
+MERGE (dEvalPuertaAbierta)-[:UPDATES]->(slAlertas)
+MERGE (dEvalPrioridadRec)-[:UPDATES]->(slRecomendaciones)
+MERGE (dEvalRecomendaciones)-[:UPDATES]->(slRecomendaciones)
+
 // ===================== Instancias (FrameInstance) =====================
 // Rangos (Temp80 / Temp30)
 MERGE (temp80:FrameInstance:Rango {id:'temp_80'})-[:INSTANCE_OF]->(Rango)
 MERGE (temp80)-[:HAS_VALUE {slot:'name',           value:'Rango de temperatura para proceso térmico', ts:datetime()}]->(slName)
 MERGE (temp80)-[:HAS_VALUE {slot:'valorEsperado',  value:80.0, ts:datetime()}]->(slValorEsperado)
 MERGE (temp80)-[:HAS_VALUE {slot:'tolerancia',     value:3.0,  ts:datetime()}]->(slTolerancia)
-// MERGE (temp80)-[:HAS_VALUE {slot:'minimo',         value:77.0, ts:datetime()}]->(slMinimo)
-// MERGE (temp80)-[:HAS_VALUE {slot:'maximo',         value:83.0, ts:datetime()}]->(slMaximo)
+MERGE (temp80)-[:HAS_VALUE {slot:'minimo',         value:77.0, ts:datetime()}]->(slMinimo)
+MERGE (temp80)-[:HAS_VALUE {slot:'maximo',         value:83.0, ts:datetime()}]->(slMaximo)
 
 MERGE (temp30:FrameInstance:Rango {id:'temp_30'})-[:INSTANCE_OF]->(Rango)
 MERGE (temp30)-[:HAS_VALUE {slot:'name',           value:'Rango de temperatura para enfriamiento', ts:datetime()}]->(slName)
 MERGE (temp30)-[:HAS_VALUE {slot:'valorEsperado',  value:30.0, ts:datetime()}]->(slValorEsperado)
 MERGE (temp30)-[:HAS_VALUE {slot:'tolerancia',     value:3.0,  ts:datetime()}]->(slTolerancia)
-// MERGE (temp30)-[:HAS_VALUE {slot:'minimo',         value:27.0, ts:datetime()}]->(slMinimo)
-// MERGE (temp30)-[:HAS_VALUE {slot:'maximo',         value:33.0, ts:datetime()}]->(slMaximo)
+MERGE (temp30)-[:HAS_VALUE {slot:'minimo',         value:27.0, ts:datetime()}]->(slMinimo)
+MERGE (temp30)-[:HAS_VALUE {slot:'maximo',         value:33.0, ts:datetime()}]->(slMaximo)
 
 // Etapas (ProcesoTérmico / Enfriamiento)
 MERGE (enf:FrameInstance:Etapa {id:'enfriamiento'})-[:INSTANCE_OF]->(Etapa)
@@ -153,12 +241,12 @@ MERGE (Corrida)-[:INICIA_EN {slot: 'etapaActual'}]-(procT)
 MERGE (cal:FrameInstance:Actuador {id:'calefactor'})-[:INSTANCE_OF]->(Actuador)
 MERGE (cal)-[:HAS_VALUE {slot:'name',     value:'Calefactor', ts:datetime()}]->(slName)
 MERGE (cal)-[:HAS_VALUE {slot:'capacidad',value:1.0,          ts:datetime()}]->(slCapacidad)
-MERGE (cal)-[:HAS_VALUE {slot:'activo',   value:false,        ts:datetime()}]->(slActivo)
+MERGE (cal)-[:HAS_VALUE {slot:'activo',   value:false,        ts:datetime()}]->(slActuadorActivo)
 
 MERGE (ven:FrameInstance:Actuador {id:'ventilador'})-[:INSTANCE_OF]->(Actuador)
 MERGE (ven)-[:HAS_VALUE {slot:'name',     value:'Ventilador', ts:datetime()}]->(slName)
 MERGE (ven)-[:HAS_VALUE {slot:'capacidad',value:-0.5,         ts:datetime()}]->(slCapacidad)
-MERGE (ven)-[:HAS_VALUE {slot:'activo',   value:false,        ts:datetime()}]->(slActivo)
+MERGE (ven)-[:HAS_VALUE {slot:'activo',   value:false,        ts:datetime()}]->(slActuadorActivo)
 
 // Recomendaciones (instancias) + conflictos
 MERGE (recEV:FrameInstance:Recomendacion {id:'encender_ventilador'})-[:INSTANCE_OF]->(Recomendacion)
@@ -201,7 +289,58 @@ MERGE (recAC)-[:CONFLICTA_CON]->(recM)
 MERGE (recM)-[:CONFLICTA_CON]->(recEV)
 MERGE (recM)-[:CONFLICTA_CON]->(recAV)
 MERGE (recM)-[:CONFLICTA_CON]->(recEC)
-MERGE (recM)-[:CONFLICTA_CON]->(recAC)
+MERGE (recM)-[:CONFLICTA_CON]->(recAC);
+
+// ===================== Triggers =====================
+// Trigger para actualizar minimo y maximo al cambiar VE o Tol en un Rango
+CALL apoc.trigger.add('actualizarMinimoMaximo',
+  "
+    // Obtenemos los cambios en las relaciones verificando la existencia de los cambios
+    UNWIND coalesce($assignedRelationshipProperties.value, {}) AS chg
+    WITH chg
+    WHERE chg IS NOT NULL 
+    UNWIND coalesce(chg, {}) AS chgRel
+    //
+    WITH chgRel.relationship AS rel, chgRel.key AS key, coalesce(chgRel.old, 0) AS old, chgRel.new AS new
+    WHERE new IS NOT NULL AND key = 'value' AND type(rel) = 'HAS_VALUE' AND rel.slot IN ['valorEsperado','tolerancia']
+    CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
+    CALL apoc.log.info('actMinMax: key=' + toString(key))
+    CALL apoc.log.info('actMinMax: old=' + toString(old))
+    CALL apoc.log.info('actMinMax: new=' + toString(new))
+
+
+    // Instancia de :Rango afectada
+    WITH DISTINCT startNode(rel) AS rangoNode
+    WHERE rangoNode:Rango
+
+    // Leer valores actuales de VE y Tol (pueden haber cambiado ambos en la misma tx)
+    OPTIONAL MATCH (rangoNode)-[ve:HAS_VALUE {slot:'valorEsperado'}]->(:Slot)
+    OPTIONAL MATCH (rangoNode)-[to:HAS_VALUE {slot:'tolerancia'}]->(:Slot)
+    WITH rangoNode,
+        toFloat(coalesce(ve.value,0)) AS veVal,
+        toFloat(coalesce(to.value,0)) AS tolVal,
+        datetime() AS now
+
+    WITH rangoNode,
+        (veVal - tolVal) AS nuevoMin,
+        (veVal + tolVal) AS nuevoMax, now
+
+    CALL apoc.log.info('nuevoMin: ' + toString(nuevoMin))
+    CALL apoc.log.info('nuevoMax: ' + toString(nuevoMax))
+
+    // Upsert de minimo y maximo
+    MATCH (sMin:Slot {name:'minimo'}), (sMax:Slot {name:'maximo'})
+    MERGE (rangoNode)-[rmin:HAS_VALUE {slot:'minimo'}]->(sMin)
+      ON CREATE SET rmin.value = nuevoMin, rmin.ts = now, rmin.source='trigger_actualizarMinimoMaximo'
+      ON MATCH  SET rmin.value = nuevoMin, rmin.ts = now, rmin.source='trigger_actualizarMinimoMaximo'
+
+    MERGE (rangoNode)-[rmax:HAS_VALUE {slot:'maximo'}]->(sMax)
+      ON CREATE SET rmax.value = nuevoMax, rmax.ts = now, rmax.source='trigger_actualizarMinimoMaximo'
+      ON MATCH  SET rmax.value = nuevoMax, rmax.ts = now, rmax.source='trigger_actualizarMinimoMaximo'
+
+    RETURN count(*) AS updated
+
+",{phase:'after'});
 
 
 
