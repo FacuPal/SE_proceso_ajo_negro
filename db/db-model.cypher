@@ -282,7 +282,32 @@ MERGE (recM)-[:CONFLICTA_CON]->(recAV)
 MERGE (recM)-[:CONFLICTA_CON]->(recEC)
 MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
+// ==================== Procedures =====================
+:use system;
+
+// Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
+CALL apoc.custom.installProcedure(
+    'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
+    "
+        UNWIND coalesce($rels,[]) AS rel
+        WITH rel
+        WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+        WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
+        WHERE lectura:Lectura AND corridaId IS NOT NULL 
+        MATCH (corrida:Corrida {id:corridaId})
+        MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
+        ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+        ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+        RETURN count(*) AS created
+    ",
+    'neo4j',
+    'write',
+    'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
+);
+
 // ===================== Triggers =====================
+
+
 // trigger para asegurar que solo haya una corrida activa (sin fechaFin)
 CALL apoc.trigger.add('unaCorridaActiva',
   "
@@ -309,13 +334,8 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
     WITH chg
     WHERE chg IS NOT NULL 
     UNWIND coalesce(chg, {}) AS chgRel
-    //
     WITH chgRel.relationship AS rel, chgRel.key AS key, coalesce(chgRel.old, 0) AS old, chgRel.new AS new
     WHERE new IS NOT NULL AND key = 'value' AND type(rel) = 'HAS_VALUE' AND rel.slot IN ['valorEsperado','tolerancia']
-    // CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
-    // CALL apoc.log.info('actMinMax: key=' + toString(key))
-    // CALL apoc.log.info('actMinMax: old=' + toString(old))
-    // CALL apoc.log.info('actMinMax: new=' + toString(new))
 
 
     // Instancia de :Rango afectada
@@ -334,9 +354,6 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
         (veVal - tolVal) AS nuevoMin,
         (veVal + tolVal) AS nuevoMax, now
 
-    // CALL apoc.log.info('nuevoMin: ' + toString(nuevoMin))
-    // CALL apoc.log.info('nuevoMax: ' + toString(nuevoMax))
-
     // Upsert de minimo y maximo
     MATCH (sMin:Slot {name:'minimo'}), (sMax:Slot {name:'maximo'})
     MERGE (rangoNode)-[rmin:HAS_VALUE {slot:'minimo'}]->(sMin)
@@ -349,7 +366,7 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 
     RETURN count(*) AS updated
 
-",{phase:'after'});
+",{phase:'afterAsync'});
 
 
 // Trgger para no permitir agregar Lecturas a una Corrida que ya está finalizada
@@ -364,8 +381,6 @@ CALL apoc.trigger.add('verificarCorridaActiva',
     OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
     CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
     ", {phase:'before'});
-
-
 
 CALL apoc.trigger.add('actualizarTemperatura',
   "
@@ -390,52 +405,54 @@ CALL apoc.trigger.add('actualizarTemperatura',
        ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
        ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
-    WITH corrida, newLectura, now, rUltLect
-    CALL apoc.refactor.to(rUltLect, newLectura) YIELD output as relNew
-      SET relNew.ts = now, relNew.source='trigger_actualizarTemperatura'
+    WITH corrida, newLectura, now
+    MATCH (corrida)-[rUltLectOld:ULTIMA_LECTURA]->()
+    DELETE rUltLectOld
+    
+    MERGE (corrida)-[rUltLect:ULTIMA_LECTURA {slot:'ultimaLectura'}]->(newLectura)
+      ON CREATE SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
+      ON MATCH  SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
+    // WITH corrida, newLectura, now, rUltLect
+    // CALL apoc.refactor.to(rUltLect, newLectura) YIELD output as relNew
+    //   SET relNew.ts = now, relNew.source='trigger_actualizarTemperatura'
 
 ", {phase:'afterAsync'});
 
 // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
 CALL apoc.trigger.add('actualizarEstadosActuadores',
   "
-    // Cuando se crea una nueva relación de tipo ULTIMA_LECTURA o se modifica su value
     UNWIND coalesce($assignedRelationshipProperties.value, {}) AS chg
     WITH chg
-    WHERE chg IS NOT NULL
+    WHERE chg IS NOT NULL 
     UNWIND coalesce(chg, {}) AS chgRel
+    WITH chgRel.relationship AS newRel
 
-    WITH chgRel.relationship AS rel, chgRel.key AS key, chgRel.new AS new
-    WHERE new IS NOT NULL AND key = 'value' AND type(rel) = 'ULTIMA_LECTURA' AND startNode(rel):Corrida
 
-    // CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
-    // CALL apoc.log.info('actMinMax: key=' + toString(key))
-    // CALL apoc.log.info('actMinMax: new=' + toString(new))
-    
-    // Obtenemos la corrida que cambió su última lectura
-    WITH DISTINCT startNode(rel) AS corridaNode, rel
-    WHERE corridaNode:Corrida
-    
-    // Obtenemos la lectura actual
-    MATCH (corridaNode)-[:HAS_VALUE {slot:'ultimaLectura'}]->(slUltimaLectura)
-    MATCH (lectura:Lectura {id: rel.value})
-    
+    // Cuando se crea una nueva relación de tipo ULTIMA_LECTURA o se modifica su value
+    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Nueva relación ULTIMA_LECTURA detectada.')
+    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Tipo de relación: ' + type(newRel))
+
+    WITH newRel, startNode(newRel) AS lectura, endNode(newRel) AS corrida
+    WHERE lectura:Lectura AND corrida:Corrida AND type(newRel) = 'ULTIMA_LECTURA'
+
+    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Lectura nueva o actualizada: ' + lectura.id + ' para corrida: ' + corrida.id)
+
     // Obtenemos la tendencia de la lectura
-    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(slTendencia:Slot)
-    WITH corridaNode, toFloat(tendRel.value) AS tendencia, datetime() AS now
+    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+    WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
     
     // Obtenemos los actuadores
     MATCH (calefactor:Actuador {id:'calefactor'})
     MATCH (ventilador:Actuador {id:'ventilador'})
-    MATCH (calefactor)-[capCalRel:HAS_VALUE {slot:'capacidad'}]->(slCapacidad)
-    MATCH (ventilador)-[capVenRel:HAS_VALUE {slot:'capacidad'}]->(slCapacidad)
-    
-    WITH corridaNode, tendencia, now, calefactor, ventilador,
+    MATCH (calefactor)-[capCalRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+    MATCH (ventilador)-[capVenRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+
+    WITH corrida, tendencia, now, calefactor, ventilador,
          toFloat(capCalRel.value) AS capacidadCalefactor,
          toFloat(capVenRel.value) AS capacidadVentilador
     
     // Determinamos los estados según las reglas
-    WITH corridaNode, tendencia, now, calefactor, ventilador, capacidadCalefactor, capacidadVentilador,
+    WITH corrida, tendencia, now, calefactor, ventilador, capacidadCalefactor, capacidadVentilador,
          CASE 
            WHEN tendencia > 0 THEN true
            WHEN tendencia < 0 AND tendencia > capacidadVentilador THEN true
@@ -460,7 +477,7 @@ CALL apoc.trigger.add('actualizarEstadosActuadores',
     
     RETURN count(*) AS updated
 
-", {phase:'after'});
+", {phase:'afterAsync'});
 
 // MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
 // MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
