@@ -27,6 +27,8 @@ MERGE (c)-[rActs:HAS_VALUE {slot:'actuadores'}]->(slActuadores)
   ON CREATE SET rActs.value = ['calefactor','ventilador'], rActs.ts = now
   ON MATCH  SET rActs.value = ['calefactor','ventilador'], rActs.ts = now;
 
+CALL apoc.util.sleep(1000); // Esperar 1 segundo para diferenciar timestamps
+
 // Crear una Lectura asociada a la Corrida como última lectura 
 // tendencia 2 => Calefactor prendido y ventilador apagado
 MATCH (c:FrameInstance:Corrida {id:'corrida_2025_10_03_01'})-[:ETAPA_ACTUAL]->(etapa:Etapa)

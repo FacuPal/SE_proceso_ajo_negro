@@ -453,33 +453,35 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 CALL apoc.trigger.add('actualizarTemperatura',
   "
     // Cuando se crea una nueva Lectura
-    // Cuando se crea una nueva Lectura
     UNWIND coalesce($createdRelationships, []) AS rel
     WITH rel
     WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
     WITH rel, startNode(rel) AS newLectura, rel.value AS corridaId
     WHERE newLectura:Lectura AND corridaId IS NOT NULL 
     MATCH (corrida:Corrida {id:corridaId})
-    
-    WITH newLectura, corrida
 
+    CALL apoc.log.info('Trigger actualizarTemperatura: Procesando nueva lectura ' + newLectura.id + ' para corrida ' + corridaId)
+
+    WITH newLectura, corrida
 
     // Timestamps
     MATCH (newLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
-    OPTIONAL MATCH (corrida)-[rUltLect:ULTIMA_LECTURA]->(ultimaLectura:Lectura)-[valUltTs:HAS_VALUE {slot:'ts'}]->(:Slot)
+    OPTIONAL MATCH (corrida)-[rUltLect:ULTIMA_LECTURA]->(ultimaLectura:Lectura)
+    OPTIONAL MATCH (ultimaLectura)-[valUltTs:HAS_VALUE {slot:'ts'}]->(:Slot)
 
-    WITH corrida, newLectura, valTs, valUltTs, datetime() AS now, rUltLect
-    WHERE valUltTs.value IS NULL OR valTs.value > valUltTs.value
+    WITH corrida, newLectura, valTs, valUltTs, datetime() AS now, rUltLect, ultimaLectura
+    WHERE ultimaLectura IS NULL OR valUltTs.value IS NULL OR valTs.value > valUltTs.value
+
+    CALL apoc.log.info('Trigger actualizarTemperatura: Nueva lectura ' + newLectura.id + ' para corrida ' + corrida.id + ' es más reciente que la última lectura actual ' + (CASE WHEN ultimaLectura IS NULL THEN 'N/A' ELSE ultimaLectura.id END))
 
     WITH corrida, newLectura, now, rUltLect
-    // CALL apoc.log.info('Creando relación entre la corrida y la nueva lectura...')
 
     MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(:Slot {name:'ultimaLectura'})
        ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
        ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
     WITH corrida, newLectura, now
-    MATCH (corrida)-[rUltLectOld:ULTIMA_LECTURA]->()
+    OPTIONAL MATCH (corrida)-[rUltLectOld:ULTIMA_LECTURA]->()
     DELETE rUltLectOld
     
     MERGE (corrida)-[rUltLect:ULTIMA_LECTURA {slot:'ultimaLectura'}]->(newLectura)
@@ -491,70 +493,70 @@ CALL apoc.trigger.add('actualizarTemperatura',
 
 ", {phase:'afterAsync'});
 
-// MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
-CALL apoc.trigger.add('actualizarEstadosActuadores',
-  "
-    UNWIND coalesce($assignedRelationshipProperties.value, {}) AS chg
-    WITH chg
-    WHERE chg IS NOT NULL 
-    UNWIND coalesce(chg, {}) AS chgRel
-    WITH chgRel.relationship AS newRel
+// // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
+// CALL apoc.trigger.add('actualizarEstadosActuadores',
+//   "
+//     UNWIND coalesce($assignedRelationshipProperties.value, {}) AS chg
+//     WITH chg
+//     WHERE chg IS NOT NULL 
+//     UNWIND coalesce(chg, {}) AS chgRel
+//     WITH chgRel.relationship AS newRel
 
 
-    // Cuando se crea una nueva relación de tipo ULTIMA_LECTURA o se modifica su value
-    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Nueva relación ULTIMA_LECTURA detectada.')
-    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Tipo de relación: ' + type(newRel))
+//     // Cuando se crea una nueva relación de tipo ULTIMA_LECTURA o se modifica su value
+//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Nueva relación ULTIMA_LECTURA detectada.')
+//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Tipo de relación: ' + type(newRel))
 
-    WITH newRel, startNode(newRel) AS lectura, endNode(newRel) AS corrida
-    WHERE lectura:Lectura AND corrida:Corrida AND type(newRel) = 'ULTIMA_LECTURA'
+//     WITH newRel, startNode(newRel) AS lectura, endNode(newRel) AS corrida
+//     WHERE lectura:Lectura AND corrida:Corrida AND type(newRel) = 'ULTIMA_LECTURA'
 
-    CALL apoc.log.info('Trigger actualizarEstadosActuadores: Lectura nueva o actualizada: ' + lectura.id + ' para corrida: ' + corrida.id)
+//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Lectura nueva o actualizada: ' + lectura.id + ' para corrida: ' + corrida.id)
 
-    // Obtenemos la tendencia de la lectura
-    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
-    WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
+//     // Obtenemos la tendencia de la lectura
+//     MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+//     WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
     
-    // Obtenemos los actuadores
-    MATCH (calefactor:Actuador {id:'calefactor'})
-    MATCH (ventilador:Actuador {id:'ventilador'})
-    MATCH (calefactor)-[capCalRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-    MATCH (ventilador)-[capVenRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+//     // Obtenemos los actuadores
+//     MATCH (calefactor:Actuador {id:'calefactor'})
+//     MATCH (ventilador:Actuador {id:'ventilador'})
+//     MATCH (calefactor)-[capCalRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+//     MATCH (ventilador)-[capVenRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
 
-    WITH corrida, tendencia, now, calefactor, ventilador,
-         toFloat(capCalRel.value) AS capacidadCalefactor,
-         toFloat(capVenRel.value) AS capacidadVentilador
+//     WITH corrida, tendencia, now, calefactor, ventilador,
+//          toFloat(capCalRel.value) AS capacidadCalefactor,
+//          toFloat(capVenRel.value) AS capacidadVentilador
     
-    // Determinamos los estados según las reglas
-    WITH corrida, tendencia, now, calefactor, ventilador, capacidadCalefactor, capacidadVentilador,
-         CASE 
-           WHEN tendencia > 0 THEN true
-           WHEN tendencia < 0 AND tendencia > capacidadVentilador THEN true
-           ELSE false
-         END AS estadoCalefactor,
-         CASE
-           WHEN tendencia > 0 AND tendencia < capacidadCalefactor THEN true
-           WHEN tendencia < 0 THEN true
-           ELSE false
-         END AS estadoVentilador
+//     // Determinamos los estados según las reglas
+//     WITH corrida, tendencia, now, calefactor, ventilador, capacidadCalefactor, capacidadVentilador,
+//          CASE 
+//            WHEN tendencia > 0 THEN true
+//            WHEN tendencia < 0 AND tendencia > capacidadVentilador THEN true
+//            ELSE false
+//          END AS estadoCalefactor,
+//          CASE
+//            WHEN tendencia > 0 AND tendencia < capacidadCalefactor THEN true
+//            WHEN tendencia < 0 THEN true
+//            ELSE false
+//          END AS estadoVentilador
     
-    // Actualizamos el estado del calefactor
-    MATCH (slActuadorActivo:Slot {name:'activo'})
-    MERGE (calefactor)-[rCalActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
-      ON CREATE SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
-      ON MATCH  SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
+//     // Actualizamos el estado del calefactor
+//     MATCH (slActuadorActivo:Slot {name:'activo'})
+//     MERGE (calefactor)-[rCalActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
+//       ON CREATE SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
+//       ON MATCH  SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
     
-    // Actualizamos el estado del ventilador
-    MERGE (ventilador)-[rVenActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
-      ON CREATE SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
-      ON MATCH  SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
+//     // Actualizamos el estado del ventilador
+//     MERGE (ventilador)-[rVenActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
+//       ON CREATE SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
+//       ON MATCH  SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
     
-    RETURN count(*) AS updated
+//     RETURN count(*) AS updated
 
-", {phase:'afterAsync'});
+// ", {phase:'afterAsync'});
 
-// MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
-// MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
-// MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
-// MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
+// // MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
+// // MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
+// // MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
+// // MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
 
 
