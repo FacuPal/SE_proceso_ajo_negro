@@ -305,6 +305,7 @@ CALL apoc.custom.installProcedure(
     'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
 );
 
+:use neo4j;
 // ===================== Triggers =====================
 
 
