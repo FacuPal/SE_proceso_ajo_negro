@@ -22,10 +22,6 @@ MERGE (c)-[rEt:HAS_VALUE {slot:'etapaActual'}]->(slEtapaActual)
   ON CREATE SET rEt.value = 'proceso_termico', rEt.ts = now
   ON MATCH  SET rEt.value = 'proceso_termico', rEt.ts = now
 
-MERGE (c)-[re:ETAPA_ACTUAL {slot:'etapaActual'}]->(procT)
-  ON CREATE SET re.ts = now, re.source = 'seed'
-  ON MATCH  SET re.ts = now, re.source = 'seed'
-
 // Lista de actuadores iniciales (coincide con defaults del modelo)
 MERGE (c)-[rActs:HAS_VALUE {slot:'actuadores'}]->(slActuadores)
   ON CREATE SET rActs.value = ['calefactor','ventilador'], rActs.ts = now
@@ -72,18 +68,18 @@ MERGE (l)-[lvEst:HAS_VALUE {slot:'estado'}]->(slLEstado)
 MERGE (l)-[lvCorr:HAS_VALUE {slot:'corrida'}]->(slLCorrida)
   ON CREATE SET lvCorr.value = c.id, lvCorr.ts = now
   ON MATCH  SET lvCorr.value = c.id, lvCorr.ts = now
-MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
+// MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
 
 MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
   ON CREATE SET lvEt.value = 'proceso_termico', lvEt.ts = now
   ON MATCH  SET lvEt.value = 'proceso_termico', lvEt.ts = now
-MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(procT)
+// MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(procT)
 
 // Marcar como última lectura en Corrida (valor + relación)
 MERGE (c)-[rUL:HAS_VALUE {slot:'ultimaLectura'}]->(slUltimaLectura)
   ON CREATE SET rUL.value = l.id, rUL.ts = now
   ON MATCH  SET rUL.value = l.id, rUL.ts = now;
-MERGE (c)-[rRel:ULTIMA_LECTURA {slot:'ultimaLectura', ts:now}]->(l);
+// MERGE (c)-[rRel:ULTIMA_LECTURA {slot:'ultimaLectura', ts:now}]->(l);
 
 
 // -------------------------------------------------------------------//
@@ -127,12 +123,12 @@ MERGE (l)-[lvEst:HAS_VALUE {slot:'estado'}]->(slLEstado)
 MERGE (l)-[lvCorr:HAS_VALUE {slot:'corrida'}]->(slLCorrida)
   ON CREATE SET lvCorr.value = c.id, lvCorr.ts = now
   ON MATCH  SET lvCorr.value = c.id, lvCorr.ts = now
-MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
+// MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
 
 MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
   ON CREATE SET lvEt.value = etapa.id, lvEt.ts = now
-  ON MATCH  SET lvEt.value = etapa.id, lvEt.ts = now
-MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(etapa);
+  ON MATCH  SET lvEt.value = etapa.id, lvEt.ts = now;
+// MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(etapa);
 
 // -------------------------------------------------------------------//
 // Otra lectura

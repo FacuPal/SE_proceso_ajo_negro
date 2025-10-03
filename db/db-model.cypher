@@ -283,30 +283,109 @@ MERGE (recM)-[:CONFLICTA_CON]->(recEC)
 MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 // ==================== Procedures =====================
-:use system;
+// :use system;
 
-// Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
-CALL apoc.custom.installProcedure(
-    'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
-    "
-        UNWIND coalesce($rels,[]) AS rel
-        WITH rel
-        WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
-        WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
-        WHERE lectura:Lectura AND corridaId IS NOT NULL 
-        MATCH (corrida:Corrida {id:corridaId})
-        MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
-        ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-        ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-        RETURN count(*) AS created
-    ",
-    'neo4j',
-    'write',
-    'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
-);
-
-:use neo4j;
+// // Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
+// CALL apoc.custom.installProcedure(
+//     'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
+//     "
+//         UNWIND coalesce($rels,[]) AS rel
+//         WITH rel
+//         WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+//         WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
+//         WHERE lectura:Lectura AND corridaId IS NOT NULL 
+//         MATCH (corrida:Corrida {id:corridaId})
+//         MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
+//         ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+//         ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+//         RETURN count(*) AS created
+//     ",
+//     'neo4j',
+//     'write',
+//     'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
+// );
+// CALL apoc.custom.installProcedure(
+//     'relacionarLecturaEtapaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
+//     "
+//         UNWIND coalesce($rels,[]) AS rel
+//         WITH rel
+//         WHERE type(rel)='HAS_VALUE' AND rel.slot='etapa'
+//         WITH rel, startNode(rel) AS lectura, rel.value AS etapaId
+//         WHERE lectura:Lectura AND etapaId IS NOT NULL 
+//         MATCH (etapa:Etapa {id:etapaId})
+//         MERGE (lectura)-[r:EN_ETAPA {slot:'etapa'}]->(etapa)
+//         ON CREATE SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
+//         ON MATCH  SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
+//         RETURN count(*) AS created
+//     ",
+//     'neo4j',
+//     'write',
+//     'Crea relaciones EN_ETAPA desde Lectura a Etapa a partir de HAS_VALUE slot:etapa'
+// );
+// :use neo4j;
 // ===================== Triggers =====================
+// Trigger para agregar relacion no canonica ETAPA_ACTUAL desde Corrida a Etapa
+CALL apoc.trigger.add('relacionarCorridaEtapa',
+  "
+    // Cuando se crea una nueva Lectura
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='etapaActual'
+    WITH rel, startNode(rel) AS corrida, rel.value AS etapaId
+    WHERE corrida:Corrida AND etapaId IS NOT NULL
+    MATCH (etapa:Etapa {id:etapaId})
+    MERGE (corrida)-[r:ETAPA_ACTUAL {slot:'etapa'}]->(etapa)
+      ON CREATE SET r.source='trigger_relacionarCorridaEtapa', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaEtapa', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
+
+// Trgger para no permitir agregar Lecturas a una Corrida que ya está finalizada
+CALL apoc.trigger.add('verificarCorridaActiva',
+  "
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+    WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
+    WHERE lectura:Lectura AND corridaId IS NOT NULL 
+    MATCH (corrida:Corrida {id:corridaId})
+
+    OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
+    CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
+    ", {phase:'before'});
+
+
+// Trigger para agregar relacion no canonica DE_CORRIDA desde Lectura a Corrida
+CALL apoc.trigger.add('relacionarLecturaCorrida',
+  "
+    // Cuando se crea una nueva Lectura
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+    WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
+    WHERE lectura:Lectura AND corridaId IS NOT NULL 
+    MATCH (corrida:Corrida {id:corridaId})
+    MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
+      ON CREATE SET r.source='trigger_relacionarLecturaCorrida', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarLecturaCorrida', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
+
+// Trigger para agregar relacion no canonica EN_ETAPA desde Lectura a Etapa
+CALL apoc.trigger.add('relacionarLecturaEtapa',
+  "
+    // Cuando se crea una nueva Lectura
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='etapa'
+    WITH rel, startNode(rel) AS lectura, rel.value AS etapaId
+    WHERE lectura:Lectura AND etapaId IS NOT NULL 
+    MATCH (etapa:Etapa {id:etapaId})
+    MERGE (lectura)-[r:EN_ETAPA {slot:'etapa'}]->(etapa)
+      ON CREATE SET r.source='trigger_relacionarLecturaEtapa', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarLecturaEtapa', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
 
 
 // trigger para asegurar que solo haya una corrida activa (sin fechaFin)
@@ -370,27 +449,20 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 ",{phase:'afterAsync'});
 
 
-// Trgger para no permitir agregar Lecturas a una Corrida que ya está finalizada
-CALL apoc.trigger.add('verificarCorridaActiva',
-  "
-    UNWIND coalesce($createdRelationships, []) AS newRel
-    WITH newRel
-    WHERE type(newRel) = 'DE_CORRIDA'
-    WITH startNode(newRel) AS newLectura, endNode(newRel) AS corrida
-    WHERE newLectura:Lectura AND corrida:Corrida
-
-    OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
-    CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
-    ", {phase:'before'});
-
+// WIP: Este hay que convertirlo en SP y llamarlo desde el trigger que crea la relación DE_CORRIDA
 CALL apoc.trigger.add('actualizarTemperatura',
   "
     // Cuando se crea una nueva Lectura
-    UNWIND coalesce($createdRelationships, []) AS newRel
-    WITH newRel WHERE type(newRel) = 'DE_CORRIDA'
+    // Cuando se crea una nueva Lectura
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+    WITH rel, startNode(rel) AS newLectura, rel.value AS corridaId
+    WHERE newLectura:Lectura AND corridaId IS NOT NULL 
+    MATCH (corrida:Corrida {id:corridaId})
+    
+    WITH newLectura, corrida
 
-    WITH startNode(newRel) AS newLectura, endNode(newRel) AS corrida
-    WHERE newLectura:Lectura AND corrida:Corrida
 
     // Timestamps
     MATCH (newLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
