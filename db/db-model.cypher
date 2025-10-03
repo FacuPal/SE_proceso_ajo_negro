@@ -351,7 +351,20 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
 
 ",{phase:'after'});
 
-// MERGE (dUpdTemp:Daemon {name:'actualizarTemperatura'})
+
+// Trgger para no permitir agregar Lecturas a una Corrida que ya está finalizada
+CALL apoc.trigger.add('verificarCorridaActiva',
+  "
+    UNWIND coalesce($createdRelationships, []) AS newRel
+    WITH newRel
+    WHERE type(newRel) = 'DE_CORRIDA'
+    WITH startNode(newRel) AS newLectura, endNode(newRel) AS corrida
+    WHERE newLectura:Lectura AND corrida:Corrida
+
+    OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
+    CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
+    ", {phase:'before'});
+
 CALL apoc.trigger.add('actualizarTemperatura',
   "
     // Cuando se crea una nueva Lectura
@@ -364,23 +377,11 @@ CALL apoc.trigger.add('actualizarTemperatura',
 
     CALL apoc.log.info('Nueva Lectura detectada: ' + toString(id(newLectura)) + ' para Corrida: ' + toString(id(corrida)))
 
-    // Validar que la Lectura referencie a una Corrida existente y que no tenga fecha de fin
-    CALL apoc.log.info('Revisando si la Lectura pertenece a una Corrida activa...')
-
-    OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
-    CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
+    // OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
+    // CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
 
 
     CALL apoc.log.info('Buscando la última lectura de la corrida...')
-    // MATCH (newLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
-    // WHERE valTs.value IS NOT NULL
-    // MATCH (corrida)-[:ULTIMA_LECTURA]->(ultimaLectura:Lectura)
-    // MATCH (ultimaLectura)-[valUltTs:HAS_VALUE {slot:'ts'}]->(:Slot)
-    // WHERE ultimaLectura IS NOT NULL AND valUltTs.value IS NOT NULL
-
-    // // Actualizamos la relación ULTIMA_LECTURA de la Corrida si la nueva lectura es más reciente
-    // WITH corrida, newLectura AS nuevaLectura, valTs, ultimaLectura, valUltTs, datetime() AS now
-    // WHERE valTs.value > valUltTs.value
 
     // Timestamps
     MATCH (nuevaLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
