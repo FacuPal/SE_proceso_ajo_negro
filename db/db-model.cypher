@@ -312,10 +312,10 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
     //
     WITH chgRel.relationship AS rel, chgRel.key AS key, coalesce(chgRel.old, 0) AS old, chgRel.new AS new
     WHERE new IS NOT NULL AND key = 'value' AND type(rel) = 'HAS_VALUE' AND rel.slot IN ['valorEsperado','tolerancia']
-    CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
-    CALL apoc.log.info('actMinMax: key=' + toString(key))
-    CALL apoc.log.info('actMinMax: old=' + toString(old))
-    CALL apoc.log.info('actMinMax: new=' + toString(new))
+    // CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
+    // CALL apoc.log.info('actMinMax: key=' + toString(key))
+    // CALL apoc.log.info('actMinMax: old=' + toString(old))
+    // CALL apoc.log.info('actMinMax: new=' + toString(new))
 
 
     // Instancia de :Rango afectada
@@ -334,8 +334,8 @@ CALL apoc.trigger.add('actualizarMinimoMaximo',
         (veVal - tolVal) AS nuevoMin,
         (veVal + tolVal) AS nuevoMax, now
 
-    CALL apoc.log.info('nuevoMin: ' + toString(nuevoMin))
-    CALL apoc.log.info('nuevoMax: ' + toString(nuevoMax))
+    // CALL apoc.log.info('nuevoMin: ' + toString(nuevoMin))
+    // CALL apoc.log.info('nuevoMax: ' + toString(nuevoMax))
 
     // Upsert de minimo y maximo
     MATCH (sMin:Slot {name:'minimo'}), (sMax:Slot {name:'maximo'})
@@ -365,57 +365,36 @@ CALL apoc.trigger.add('verificarCorridaActiva',
     CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
     ", {phase:'before'});
 
+
+
 CALL apoc.trigger.add('actualizarTemperatura',
   "
     // Cuando se crea una nueva Lectura
     UNWIND coalesce($createdRelationships, []) AS newRel
-    WITH newRel
-    WHERE type(newRel) = 'DE_CORRIDA'
+    WITH newRel WHERE type(newRel) = 'DE_CORRIDA'
 
     WITH startNode(newRel) AS newLectura, endNode(newRel) AS corrida
     WHERE newLectura:Lectura AND corrida:Corrida
 
-    CALL apoc.log.info('Nueva Lectura detectada: ' + toString(id(newLectura)) + ' para Corrida: ' + toString(id(corrida)))
-
-    // OPTIONAL MATCH (corrida)-[valFechaFin:HAS_VALUE {slot:'fechaFin'}]->(:Slot)
-    // CALL apoc.util.validate(valFechaFin IS NOT NULL, 'Error: No se pueden agregar Lecturas a una Corrida que ya está finalizada.', [])
-
-
-    CALL apoc.log.info('Buscando la última lectura de la corrida...')
-
     // Timestamps
-    MATCH (nuevaLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
-    OPTIONAL MATCH (corrida)-[:ULTIMA_LECTURA]->(ultimaLectura:Lectura)
-    OPTIONAL MATCH (ultimaLectura)-[valUltTs:HAS_VALUE {slot:'ts'}]->(:Slot)
+    MATCH (newLectura)-[valTs:HAS_VALUE {slot:'ts'}]->(:Slot)
+    OPTIONAL MATCH (corrida)-[rUltLect:ULTIMA_LECTURA]->(ultimaLectura:Lectura)-[valUltTs:HAS_VALUE {slot:'ts'}]->(:Slot)
 
-    CALL apoc.log.info('Comparando timestamps: nueva=' + toString(valTs.value) + ' vs ultima=' + toString(valUltTs.value))
-
-    WITH corrida, nuevaLectura, valTs, valUltTs, datetime() AS now
+    WITH corrida, newLectura, valTs, valUltTs, datetime() AS now, rUltLect
     WHERE valUltTs.value IS NULL OR valTs.value > valUltTs.value
-    
-    
 
-    CALL apoc.log.info('Actualizando la última lectura de la corrida...')
-    // Borrar ULTIMA_LECTURA anterior (si existía), sin subconsulta
-    OPTIONAL MATCH (corrida)-[relOld:ULTIMA_LECTURA]->(:Lectura)
-    WITH corrida, nuevaLectura, now, collect(relOld) AS rels
-    FOREACH (r IN rels | DELETE r)
+    WITH corrida, newLectura, now, rUltLect
+    // CALL apoc.log.info('Creando relación entre la corrida y la nueva lectura...')
 
-    WITH corrida, nuevaLectura, now
-    // Actualizamos la relación ULTIMA_LECTURA de la Corrida
-    CALL apoc.log.info('Creando relación entre la corrida y la nueva lectura...')
-    
-    MATCH (sUltimaLectura:Slot {name:'ultimaLectura'})
-    MERGE (corrida)-[rUltima:HAS_VALUE {slot:'ultimaLectura', value: nuevaLectura.id}]->(sUltimaLectura)
-      ON CREATE SET rUltima.value = nuevaLectura.id, rUltima.ts = now, rUltima.source='trigger_actualizarTemperatura'
-      ON MATCH  SET rUltima.value = nuevaLectura.id, rUltima.ts = now, rUltima.source='trigger_actualizarTemperatura'
+    MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(:Slot {name:'ultimaLectura'})
+       ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
+       ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
-    MERGE (corrida)-[rel:ULTIMA_LECTURA]->(nuevaLectura)
-      ON CREATE SET rel.ts = now, rel.source='trigger_actualizarTemperatura'
-      ON MATCH  SET rel.ts = now, rel.source='trigger_actualizarTemperatura'
+    WITH corrida, newLectura, now, rUltLect
+    CALL apoc.refactor.to(rUltLect, newLectura) YIELD output as relNew
+      SET relNew.ts = now, relNew.source='trigger_actualizarTemperatura'
 
-    RETURN count(*) AS updated
-", {phase:'after'});
+", {phase:'afterAsync'});
 
 // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
 CALL apoc.trigger.add('actualizarEstadosActuadores',
@@ -429,9 +408,9 @@ CALL apoc.trigger.add('actualizarEstadosActuadores',
     WITH chgRel.relationship AS rel, chgRel.key AS key, chgRel.new AS new
     WHERE new IS NOT NULL AND key = 'value' AND type(rel) = 'ULTIMA_LECTURA' AND startNode(rel):Corrida
 
-    CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
-    CALL apoc.log.info('actMinMax: key=' + toString(key))
-    CALL apoc.log.info('actMinMax: new=' + toString(new))
+    // CALL apoc.log.info('actMinMax: rel=' + toString(id(rel)))
+    // CALL apoc.log.info('actMinMax: key=' + toString(key))
+    // CALL apoc.log.info('actMinMax: new=' + toString(new))
     
     // Obtenemos la corrida que cambió su última lectura
     WITH DISTINCT startNode(rel) AS corridaNode, rel

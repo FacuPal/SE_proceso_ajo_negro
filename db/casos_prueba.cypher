@@ -131,3 +131,51 @@ MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
   ON CREATE SET lvEt.value = etapa.id, lvEt.ts = now
   ON MATCH  SET lvEt.value = etapa.id, lvEt.ts = now
 MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(etapa);
+
+// -------------------------------------------------------------------//
+// Otra lectura
+// Genero otra lectura para probar el trigger
+MATCH (c:FrameInstance:Corrida {id:'corrida_2025_10_03_01'})-[:ETAPA_ACTUAL]->(etapa:Etapa)
+MATCH (LectClass:FrameClass {name:'Lectura'})
+MATCH (slLName:Slot {name:'name'})
+MATCH (slTs:Slot {name:'ts'})
+MATCH (slTempInt:Slot {name:'temperaturaInterna'})
+MATCH (slTendencia:Slot {name:'tendencia'})
+MATCH (slLCorrida:Slot {name:'corrida'})
+MATCH (slLEtapa:Slot {name:'etapa'})
+MATCH (slLEstado:Slot {name:'estado'})
+MATCH (slUltimaLectura:Slot {name:'ultimaLectura'})
+WITH c, LectClass, slLName, slTs, slTempInt, slTendencia, slLCorrida, slLEtapa, slLEstado, slUltimaLectura, etapa, datetime() AS now
+
+MERGE (l:FrameInstance:Lectura {id:'lectura_2025_10_03_03'})-[:INSTANCE_OF]->(LectClass)
+MERGE (l)-[lvName:HAS_VALUE {slot:'name'}]->(slLName)
+  ON CREATE SET lvName.value = 'Lectura Corrida 2025-10-03 03', lvName.ts = now
+  ON MATCH  SET lvName.value = 'Lectura Corrida 2025-10-03 03', lvName.ts = now
+
+MERGE (l)-[lvTs:HAS_VALUE {slot:'ts'}]->(slTs)
+  ON CREATE SET lvTs.value = now, lvTs.ts = now
+  ON MATCH  SET lvTs.value = now, lvTs.ts = now
+
+// Valores de ejemplo: temperatura y estado
+MERGE (l)-[lvTemp:HAS_VALUE {slot:'temperaturaInterna'}]->(slTempInt)
+  ON CREATE SET lvTemp.value = 81.0, lvTemp.ts = now
+  ON MATCH  SET lvTemp.value = 81.0, lvTemp.ts = now
+
+MERGE (l)-[lvTend:HAS_VALUE {slot:'tendencia'}]->(slTendencia)
+  ON CREATE SET lvTend.value = 0.1, lvTend.ts = now
+  ON MATCH  SET lvTend.value = 0.1, lvTend.ts = now
+
+MERGE (l)-[lvEst:HAS_VALUE {slot:'estado'}]->(slLEstado)
+  ON CREATE SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
+  ON MATCH  SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
+
+// Referencias: corrida y etapa (valor + relación)
+MERGE (l)-[lvCorr:HAS_VALUE {slot:'corrida'}]->(slLCorrida)
+  ON CREATE SET lvCorr.value = c.id, lvCorr.ts = now
+  ON MATCH  SET lvCorr.value = c.id, lvCorr.ts = now
+MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
+
+MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
+  ON CREATE SET lvEt.value = etapa.id, lvEt.ts = now
+  ON MATCH  SET lvEt.value = etapa.id, lvEt.ts = now
+MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(etapa);
