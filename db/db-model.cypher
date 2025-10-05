@@ -158,15 +158,12 @@ CALL apoc.custom.installProcedure(
   'actualizarAlertas(corridaId :: STRING) :: VOID',
   "
     MATCH (corrida:Corrida {id:$corridaId})
-    WHERE corrida:Corrida
-
-    // Obtenemos las alertas activas de la corrida
-    OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)
-    OPTIONAL MATCH (alerta)-[:INSTANCE_OF]->(fc:FrameClass)
-    OPTIONAL MATCH (alerta)-[rActivo:HAS_VALUE {slot: 'activo'}]->()
-    WHERE alerta:Alerta AND rActivo.value = true
-    WITH corrida, collect(fc.name) AS alertasActivas
     
+    // Obtenemos las alertas activas de la corrida
+    OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)-[:INSTANCE_OF]->(fc:FrameClass)
+    WHERE EXISTS((alerta)-[:HAS_VALUE {slot: 'activo', value: true}]->())
+    WITH corrida, collect(fc.name) AS alertasActivas
+
     // Obtener la última lectura asociada a la corrida
     MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
     WHERE lectura:Lectura
@@ -187,48 +184,74 @@ CALL apoc.custom.installProcedure(
     MATCH (slAlertas:Slot {name:'alertas'})
     WITH corrida, tendRel.value AS tendencia, datetime() AS now, cIncendio, cPA, sName, sExplicacion, sActivo, sTs, slAlertas,alertasActivas
 
-    // Evaluamos creación de alerta de incendio y la activamos sólo si no existe una activa
-    FOREACH (_ IN CASE WHEN tendencia > 30.0 AND NOT 'Incendio' IN alertasActivas THEN [1] ELSE [] END |
-      MERGE (alertaInc:FrameInstance:Alerta {id: 'alerta_incendio_' + corrida.id})
-      ON CREATE SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
-      ON MATCH  SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
+    // === ALERTA DE INCENDIO ===
+    // Crear/activar si se cumple condición
+    CALL {
+      WITH corrida, tendencia, now, cIncendio, sName, sExplicacion, sActivo, sTs, slAlertas, alertasActivas    
+      WITH corrida, tendencia, now, cIncendio, sName, sExplicacion, sActivo, sTs, slAlertas, alertasActivas
+      WHERE tendencia > 30.0 AND NOT 'Incendio' IN alertasActivas
+
+      MERGE (alertaInc:FrameInstance:Alerta {id: 'incendio_' + apoc.create.uuid()})
+        ON CREATE SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
+        ON MATCH  SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
       MERGE (alertaInc)-[:INSTANCE_OF]->(cIncendio)
-      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaInc.id, ts:now, source:'proc_actualizarAlertas'}]->(sAlertas)
+      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaInc.id, ts:now, source:'proc_actualizarAlertas'}]->(slAlertas)
       MERGE (alertaInc)-[:HAS_VALUE {slot:'name', value:'Alerta de Incendio', ts:now, source:'proc_actualizarAlertas'}]->(sName)
-      MERGE (alertaInc)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está subiendo bruscamente (' + tendencia + '°C/min). Hay un posible incendio.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
+      MERGE (alertaInc)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está subiendo bruscamente (' + toString(tendencia) + '°C/min). Hay un posible incendio.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
       MERGE (alertaInc)-[:HAS_VALUE {slot:'activo', value:true, ts:now, source:'proc_actualizarAlertas'}]->(sActivo)
       MERGE (alertaInc)-[:HAS_VALUE {slot:'ts', value:now, ts:now, source:'proc_actualizarAlertas'}]->(sTs)
-    )
+      MERGE (corrida)-[:ALERTA {slot: 'alertas', ts: now, source: 'proc_actualizarAlertas'}]->(alertaInc)
+    }
 
-    // Evaluamos desactivación de alerta de incendio si la tendencia ya no es alta
-    FOREACH (_ IN CASE WHEN tendencia <= 30.0 AND 'Incendio' IN alertasActivas THEN [1] ELSE [] END |
-      MATCH (alertaInc:FrameInstance:Alerta {id: 'alerta_incendio_' + corrida.id})
+    // Desactivar si ya no se cumple condición
+    CALL {
+      WITH corrida, tendencia, now, sActivo
+      WITH corrida, tendencia, now, sActivo
+      WHERE tendencia <= 30.0
+      
+      MATCH (corrida)-[rAlerta:ALERTA]->(alertaInc:Alerta)
+      WHERE (alertaInc)-[:INSTANCE_OF]->(:FrameClass {name:'Incendio'})
+      MATCH (alertaInc)-[:HAS_VALUE {slot:'activo', value:true}]->(sActivo)
       MERGE (alertaInc)-[rActivo:HAS_VALUE {slot:'activo'}]->(sActivo)
-      ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
-      ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
-    )
+        ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+        ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+      DELETE rAlerta
+    }
 
-    // Evaluamos creación de alerta de puerta abierta y la activamos sólo si no existe una activa
-    FOREACH (_ IN CASE WHEN tendencia < -3.0 AND NOT 'PuertaAbierta'  IN alertasActivas THEN [1] ELSE [] END |
-      MERGE (alertaPA:FrameInstance:Alerta {id: 'alerta_puerta_abierta_' + corrida.id})
-      ON CREATE SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
-      ON MATCH  SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
+    // === ALERTA DE PUERTA ABIERTA ===
+    // Crear/activar si se cumple condición
+    CALL {
+      WITH corrida, tendencia, now, cPA, sName, sExplicacion, sActivo, sTs, slAlertas, alertasActivas
+      WITH corrida, tendencia, now, cPA, sName, sExplicacion, sActivo, sTs, slAlertas, alertasActivas
+      WHERE tendencia < -3.0 AND NOT 'PuertaAbierta' IN alertasActivas
+
+      MERGE (alertaPA:FrameInstance:Alerta {id: 'puerta_abierta_' + apoc.create.uuid()})
+        ON CREATE SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
+        ON MATCH  SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
       MERGE (alertaPA)-[:INSTANCE_OF]->(cPA)
-      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaPA.id, ts:now, source:'proc_actualizarAlertas'}]->(sAlertas)
+      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaPA.id, ts:now, source:'proc_actualizarAlertas'}]->(slAlertas)
       MERGE (alertaPA)-[:HAS_VALUE {slot:'name', value:'Alerta de Puerta Abierta', ts:now, source:'proc_actualizarAlertas'}]->(sName)
-      MERGE (alertaPA)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está bajando bruscamente (' + tendencia + '°C/min). Posiblemente la puerta está abierta.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
+      MERGE (alertaPA)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está bajando bruscamente (' + toString(tendencia) + '°C/min). Posiblemente la puerta está abierta.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
       MERGE (alertaPA)-[:HAS_VALUE {slot:'activo', value:true, ts:now, source:'proc_actualizarAlertas'}]->(sActivo)
       MERGE (alertaPA)-[:HAS_VALUE {slot:'ts', value:now, ts:now, source:'proc_actualizarAlertas'}]->(sTs)
-    )
+      MERGE (corrida)-[:ALERTA {slot: 'alertas', ts: now, source: 'proc_actualizarAlertas'}]->(alertaPA)
+    }
 
-    // Evaluamos desactivación de alerta de puerta abierta si la tendencia ya no es baja
-    FOREACH (_ IN CASE WHEN tendencia >= -3.0 AND 'PuertaAbierta' IN alertasActivas THEN [1] ELSE [] END |
-      MATCH (alertaPA:FrameInstance:Alerta {id: 'alerta_puerta_abierta_' + corrida.id})
+    // Desactivar si ya no se cumple condición
+    CALL {
+      WITH corrida, tendencia, now, sActivo
+      WITH corrida, tendencia, now, sActivo
+      WHERE tendencia >= -3.0
+
+      MATCH (corrida)-[rAlerta:ALERTA]->(alertaPA:Alerta)
+      WHERE (alertaPA)-[:INSTANCE_OF]->(:FrameClass {name:'PuertaAbierta'})
+      MATCH (alertaPA)-[:HAS_VALUE {slot:'activo', value:true}]->(sActivo)
       MERGE (alertaPA)-[rActivo:HAS_VALUE {slot:'activo'}]->(sActivo)
-      ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
-      ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
-    )
-    
+        ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+        ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+      DELETE rAlerta
+    }
+
   ",
   'neo4j',
   'write',
