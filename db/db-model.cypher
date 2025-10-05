@@ -4,47 +4,7 @@
 // Borrar procedimientos almacenados existentes (si los hay)
 CALL apoc.custom.dropAll('neo4j');
 
-// // Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
-// CALL apoc.custom.installProcedure(
-//     'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
-//     "
-//         UNWIND coalesce($rels,[]) AS rel
-//         WITH rel
-//         WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
-//         WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
-//         WHERE lectura:Lectura AND corridaId IS NOT NULL 
-//         MATCH (corrida:Corrida {id:corridaId})
-//         MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
-//         ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-//         ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-//         RETURN count(*) AS created
-//     ",
-//     'neo4j',
-//     'write',
-//     'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
-// );
-// CALL apoc.custom.installProcedure(
-//     'relacionarLecturaEtapaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
-//     "
-//         UNWIND coalesce($rels,[]) AS rel
-//         WITH rel
-//         WHERE type(rel)='HAS_VALUE' AND rel.slot='etapa'
-//         WITH rel, startNode(rel) AS lectura, rel.value AS etapaId
-//         WHERE lectura:Lectura AND etapaId IS NOT NULL 
-//         MATCH (etapa:Etapa {id:etapaId})
-//         MERGE (lectura)-[r:EN_ETAPA {slot:'etapa'}]->(etapa)
-//         ON CREATE SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
-//         ON MATCH  SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
-//         RETURN count(*) AS created
-//     ",
-//     'neo4j',
-//     'write',
-//     'Crea relaciones EN_ETAPA desde Lectura a Etapa a partir de HAS_VALUE slot:etapa'
-// );
-// :use neo4j;
-
 // SP para actualizar el estado de la temperatura
-
 CALL apoc.custom.installProcedure(
     'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
     "
@@ -158,7 +118,7 @@ CALL apoc.custom.installProcedure(
   'actualizarAlertas(corridaId :: STRING) :: VOID',
   "
     MATCH (corrida:Corrida {id:$corridaId})
-    
+
     // Obtenemos las alertas activas de la corrida
     OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)-[:INSTANCE_OF]->(fc:FrameClass)
     WHERE EXISTS((alerta)-[:HAS_VALUE {slot: 'activo', value: true}]->())
@@ -259,6 +219,44 @@ CALL apoc.custom.installProcedure(
 );
 
 // SP para evaluar recomendaciones
+CALL apoc.custom.installProcedure(
+  'actualizarRecomendaciones(corridaId :: STRING) :: VOID',
+  "
+    MATCH (corrida:Corrida {id:$corridaId})
+
+    // Obtenemos las recomendaciones activas de la corrida
+    OPTIONAL MATCH (corrida)-[:RECOMENDACION]->(reco:Recomendacion)-[:INSTANCE_OF]->(fc:FrameClass)
+    WHERE EXISTS((reco)-[:HAS_VALUE {slot: 'activo', value: true}]->())
+    WITH corrida, collect(fc.name) AS recomendacionesActivas
+
+    // Obtener la última lectura asociada a la corrida
+    MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
+    WHERE lectura:Lectura
+
+    // Obtenemos la tendencia de la lectura
+    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+
+    // Obtenemos las clases de recomendacion
+    MATCH (cSubirTemp:FrameClass {name:'SubirTemperatura'})
+    MATCH (cBajarTemp:FrameClass {name:'BajarTemperatura'})
+
+    // Obtenemos slots comunes
+    MATCH (sName:Slot {name:'name'})
+    MATCH (sExplicacion:Slot {name:'explicacion'})
+    MATCH (sActivo:Slot {name:'activo'})
+    MATCH (sTs:Slot {name:'ts'})
+    MATCH (sPrioridad:Slot {name:'prioridad'})
+    MATCH (sConflictaCon:Slot {name:'conflictaCon'})
+
+    MATCH (slRecomendaciones:Slot {name:'recomendaciones'})
+    WITH corrida, tendRel.value AS tendencia, datetime() AS now, cSubirTemp, cBajarTemp, sName, sExplicacion, sActivo, sTs, sPrioridad, sConflictaCon, slRecomendaciones, recomendacionesActivas
+
+    // === RECOMENDACION DE SUBIR TEMPERATURA ===
+  ",
+  'neo4j',
+  'write',
+  'Evalúa y crea las recomendaciones asociadas a una Corrida'
+);
 
 :use neo4j;
 
