@@ -23,9 +23,14 @@ MERGE (c)-[rEt:HAS_VALUE {slot:'etapaActual'}]->(slEtapaActual)
   ON MATCH  SET rEt.value = 'proceso_termico', rEt.ts = now
 
 // Lista de actuadores iniciales (coincide con defaults del modelo)
-MERGE (c)-[rActs:HAS_VALUE {slot:'actuadores'}]->(slActuadores)
-  ON CREATE SET rActs.value = ['calefactor','ventilador'], rActs.ts = now
-  ON MATCH  SET rActs.value = ['calefactor','ventilador'], rActs.ts = now;
+// Crear relacion a calefactor
+MERGE (c)-[rCal:HAS_VALUE {slot:'actuadores', value: 'calefactor'}]->(slActuadores)
+  ON CREATE SET rCal.ts = now
+  ON MATCH  SET rCal.ts = now
+
+MERGE (c)-[rVent:HAS_VALUE {slot:'actuadores', value: 'ventilador'}]->(slActuadores)
+  ON CREATE SET rVent.ts = now
+  ON MATCH  SET rVent.ts = now;
 
 CALL apoc.util.sleep(1000); // Esperar 1 segundo para diferenciar timestamps
 

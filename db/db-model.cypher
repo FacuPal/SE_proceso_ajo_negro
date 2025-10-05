@@ -1,5 +1,8 @@
 // ==================== Procedures =====================
-// :use system;
+:use system;
+
+// Borrar procedimientos almacenados existentes (si los hay)
+CALL apoc.custom.dropAll('neo4j');
 
 // // Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
 // CALL apoc.custom.installProcedure(
@@ -39,6 +42,117 @@
 //     'Crea relaciones EN_ETAPA desde Lectura a Etapa a partir de HAS_VALUE slot:etapa'
 // );
 // :use neo4j;
+
+// SP para actualizar el estado de la temperatura
+
+CALL apoc.custom.installProcedure(
+    'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
+    "
+        MATCH (lectura:Lectura {id:$lecturaId})
+        WHERE lectura:Lectura
+        // Obtener la temperatura interna de la lectura
+        MATCH (lectura)-[tempRel:HAS_VALUE {slot:'temperaturaInterna'}]->(:Slot)
+        WITH lectura, toFloat(tempRel.value) AS tempInt
+
+        // Obtener la etapa asociada a la lectura
+        MATCH (lectura)-[etRel:HAS_VALUE {slot:'etapa'}]->(:Slot)
+        WITH lectura, tempInt, etRel.value AS etapaId
+        MATCH (etapa:Etapa {id:etapaId})
+        WHERE etapa:Etapa
+
+        // Obtener el rango de temperatura asociado a la etapa
+        MATCH (etapa)-[rangoRel:HAS_VALUE {slot:'configuracionTemperatura'}]->(:Slot)
+        WITH lectura, tempInt, rangoRel.value AS rangoId
+        MATCH (rango:Rango {id:rangoId})
+        WHERE rango:Rango
+
+        // Obtener los valores de minimo y maximo del rango
+        MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
+        MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
+        WITH lectura, tempInt,
+             toFloat(minRel.value) AS minTemp,
+             toFloat(maxRel.value) AS maxTemp,
+             datetime() AS now
+
+        // Determinar el nuevo estado basado en la temperatura interna y el rango
+        WITH lectura, tempInt, minTemp, maxTemp, now,
+             CASE 
+               WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
+               WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
+               ELSE 'TemperaturaEnRango'
+             END AS nuevoEstado
+
+        // Actualizar o crear la relación HAS_VALUE para el estado
+        MATCH (slEstado:Slot {name:'estado'})
+        MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
+          ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
+          ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
+    ",
+    'neo4j',
+    'write',
+    'Actualiza el estado de la temperatura de una Lectura basada en su valor y el rango de la etapa asociada'
+);
+
+// SP para actualizar el estado de los actuadores
+CALL apoc.custom.installProcedure(
+    'actualizarEstadosActuadores(corridaId :: STRING) :: VOID',
+    "
+        MATCH (corrida:Corrida {id:$corridaId})
+        WHERE corrida:Corrida
+
+        // Obtener la última lectura asociada a la corrida
+        MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
+        WHERE lectura:Lectura
+
+        // Obtener la tendencia de la lectura
+        MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+        WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
+
+        // Obtener los actuadores asociados a la corrida
+        MATCH (corrida)-[actRel:HAS_VALUE {slot:'actuadores'}]->(:Slot)
+        WITH corrida, tendencia, now, actRel.value AS actuadoresIds
+        UNWIND actuadoresIds AS actId
+        MATCH (actuador:Actuador {id:actId})
+        WHERE actuador:Actuador
+
+        // Obtener la capacidad del actuador
+        MATCH (actuador)-[capRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+        WITH corrida, tendencia, now, actuador, toFloat(capRel.value) AS capacidad
+
+        // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
+        WITH corrida, tendencia, now, actuador, capacidad,
+             CASE 
+               WHEN capacidad > 0 THEN 
+                 CASE 
+                   WHEN tendencia > 0 THEN true
+                   WHEN tendencia < 0 AND tendencia > capacidad THEN true
+                   ELSE false
+                 END
+               WHEN capacidad < 0 THEN 
+                 CASE
+                   WHEN tendencia > 0 AND tendencia < -capacidad THEN true
+                   WHEN tendencia < 0 THEN true
+                   ELSE false
+                 END
+               ELSE false
+             END AS nuevoEstado
+
+        // Actualizar o crear la relación HAS_VALUE para el estado del actuador
+        MATCH (slActivo:Slot {name:'activo'})
+        MERGE (actuador)-[activoRel:HAS_VALUE {slot:'activo'}]->(slActivo)
+          ON CREATE SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
+          ON MATCH SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
+    ",
+    'neo4j',
+    'write',
+    'Actualiza el estado de los actuadores asociados a una Corrida basada en la tendencia de la última Lectura'
+);
+
+// SP para evaluar alertas 
+
+// SP para evaluar recomendaciones
+
+:use neo4j;
 
 
 // Esquema
@@ -389,6 +503,54 @@ CALL apoc.trigger.add('relacionarLecturaEtapa',
     RETURN count(*) AS created
     ", {phase:'afterAsync'});
 
+// Trigger para agregar relacion no canonica TIENE_ACTUADOR desde Corrida a Actuador
+CALL apoc.trigger.add('relacionarCorridaActuador',
+  "
+    // Cuando se crea una nueva relación HAS_VALUE para el slot 'actuadores' en Corrida
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='actuadores'
+    WITH rel, startNode(rel) AS corrida, rel.value AS actuadorId
+    WHERE corrida:Corrida AND actuadorId IS NOT NULL
+    MATCH (actuador:Actuador {id:actuadorId})
+    MERGE (corrida)-[r:TIENE_ACTUADOR {slot:'actuadores'}]->(actuador)
+      ON CREATE SET r.source='trigger_relacionarCorridaActuador', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaActuador', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
+
+// Trigger para agregar relacion no canonica RECOMIENDA desde Corrida a Recomendacion
+CALL apoc.trigger.add('relacionarCorridaRecomendacion',
+  "
+    // Cuando se crea una nueva relación HAS_VALUE para el slot 'recomendaciones' en Corrida
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='recomendaciones'
+    WITH rel, startNode(rel) AS corrida, rel.value AS recomendacionId
+    WHERE corrida:Corrida AND recomendacionId IS NOT NULL
+    MATCH (recomendacion:Recomendacion {id:recomendacionId})
+    MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(recomendacion)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
+
+// Trigger para agregar relacion no canonica ALERTA desde Corrida a Alerta
+CALL apoc.trigger.add('relacionarCorridaAlerta',
+  "
+    // Cuando se crea una nueva relación HAS_VALUE para el slot 'alertas' en Corrida
+    UNWIND coalesce($createdRelationships, []) AS rel
+    WITH rel
+    WHERE type(rel)='HAS_VALUE' AND rel.slot='alertas'
+    WITH rel, startNode(rel) AS corrida, rel.value AS alertaId
+    WHERE corrida:Corrida AND alertaId IS NOT NULL
+    MATCH (alerta:Alerta {id:alertaId})
+    MERGE (corrida)-[r:ALERTA {slot:'alertas'}]->(alerta)
+      ON CREATE SET r.source='trigger_relacionarCorridaAlerta', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaAlerta', r.ts=datetime()
+    RETURN count(*) AS created
+    ", {phase:'afterAsync'});
+
 
 // trigger para asegurar que solo haya una corrida activa (sin fechaFin)
 CALL apoc.trigger.add('unaCorridaActiva',
@@ -497,66 +659,6 @@ CALL apoc.trigger.add('actualizarTemperatura',
     // Llamar al SP para evaluar recomendaciones
 
 ", {phase:'afterAsync'});
-
-// ==================== Procedures =====================
-:use system;
-
-// SP para actualizar el estado de la temperatura
-
-CALL apoc.custom.installProcedure(
-    'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
-    "
-        MATCH (lectura:Lectura {id:$lecturaId})
-        WHERE lectura:Lectura
-        // Obtener la temperatura interna de la lectura
-        MATCH (lectura)-[tempRel:HAS_VALUE {slot:'temperaturaInterna'}]->(:Slot)
-        WITH lectura, toFloat(tempRel.value) AS tempInt
-
-        // Obtener la etapa asociada a la lectura
-        MATCH (lectura)-[etRel:HAS_VALUE {slot:'etapa'}]->(:Slot)
-        WITH lectura, tempInt, etRel.value AS etapaId
-        MATCH (etapa:Etapa {id:etapaId})
-        WHERE etapa:Etapa
-
-        // Obtener el rango de temperatura asociado a la etapa
-        MATCH (etapa)-[rangoRel:HAS_VALUE {slot:'configuracionTemperatura'}]->(:Slot)
-        WITH lectura, tempInt, rangoRel.value AS rangoId
-        MATCH (rango:Rango {id:rangoId})
-        WHERE rango:Rango
-
-        // Obtener los valores de minimo y maximo del rango
-        MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
-        MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
-        WITH lectura, tempInt,
-             toFloat(minRel.value) AS minTemp,
-             toFloat(maxRel.value) AS maxTemp,
-             datetime() AS now
-
-        // Determinar el nuevo estado basado en la temperatura interna y el rango
-        WITH lectura, tempInt, minTemp, maxTemp, now,
-             CASE 
-               WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
-               WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
-               ELSE 'TemperaturaEnRango'
-             END AS nuevoEstado
-
-        // Actualizar o crear la relación HAS_VALUE para el estado
-        MATCH (slEstado:Slot {name:'estado'})
-        MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
-          ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
-          ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
-    ",
-    'neo4j',
-    'write',
-    'Actualiza el estado de la temperatura de una Lectura basada en su valor y el rango de la etapa asociada'
-);
-// SP para actualizar el estado de los actuadores
-
-// SP para evaluar alertas 
-
-// SP para evaluar recomendaciones
-
-:use neo4j;
 
 
 // // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
