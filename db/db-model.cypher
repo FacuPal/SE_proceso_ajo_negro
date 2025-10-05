@@ -7,118 +7,124 @@ CALL apoc.custom.dropAll('neo4j');
 
 // SP para actualizar el estado de la temperatura
 CALL apoc.custom.installProcedure(
-    'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
-    "
-        MATCH (lectura:Lectura {id:$lecturaId})
-        WHERE lectura:Lectura
-        // Obtener la temperatura interna de la lectura
-        MATCH (lectura)-[tempRel:HAS_VALUE {slot:'temperaturaInterna'}]->(:Slot)
-        WITH lectura, toFloat(tempRel.value) AS tempInt
+  'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
+  "   
+    MATCH (lectura:Lectura {id:$lecturaId})
+    WHERE lectura:Lectura
+    // Obtener la temperatura interna de la lectura
+    MATCH (lectura)-[tempRel:HAS_VALUE {slot:'temperaturaInterna'}]->(:Slot)
+    WITH lectura, toFloat(tempRel.value) AS tempInt
 
-        // Obtener la etapa asociada a la lectura
-        MATCH (lectura)-[etRel:HAS_VALUE {slot:'etapa'}]->(:Slot)
-        WITH lectura, tempInt, etRel.value AS etapaId
-        MATCH (etapa:Etapa {id:etapaId})
-        WHERE etapa:Etapa
+    // Obtener la etapa asociada a la lectura
+    MATCH (lectura)-[etRel:HAS_VALUE {slot:'etapa'}]->(:Slot)
+    WITH lectura, tempInt, etRel.value AS etapaId
+    MATCH (etapa:Etapa {id:etapaId})
+    WHERE etapa:Etapa
 
-        // Obtener el rango de temperatura asociado a la etapa
-        MATCH (etapa)-[rangoRel:HAS_VALUE {slot:'configuracionTemperatura'}]->(:Slot)
-        WITH lectura, tempInt, rangoRel.value AS rangoId
-        MATCH (rango:Rango {id:rangoId})
-        WHERE rango:Rango
+    // Obtener el rango de temperatura asociado a la etapa
+    MATCH (etapa)-[rangoRel:HAS_VALUE {slot:'configuracionTemperatura'}]->(:Slot)
+    WITH lectura, tempInt, rangoRel.value AS rangoId
+    MATCH (rango:Rango {id:rangoId})
+    WHERE rango:Rango
 
-        // Obtener los valores de minimo y maximo del rango
-        MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
-        MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
-        WITH lectura, tempInt,
-             toFloat(minRel.value) AS minTemp,
-             toFloat(maxRel.value) AS maxTemp,
-             datetime() AS now
+    // Obtener los valores de minimo y maximo del rango
+    MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
+    MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
+    WITH lectura, tempInt,
+          toFloat(minRel.value) AS minTemp,
+          toFloat(maxRel.value) AS maxTemp,
+          datetime() AS now
 
-        // Determinar el nuevo estado basado en la temperatura interna y el rango
-        WITH lectura, tempInt, minTemp, maxTemp, now,
-             CASE 
-               WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
-               WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
-               ELSE 'TemperaturaEnRango'
-             END AS nuevoEstado
+    // Determinar el nuevo estado basado en la temperatura interna y el rango
+    WITH lectura, tempInt, minTemp, maxTemp, now,
+          CASE 
+            WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
+            WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
+            ELSE 'TemperaturaEnRango'
+          END AS nuevoEstado
 
-        // Actualizar o crear la relación HAS_VALUE para el estado
-        MATCH (slEstado:Slot {name:'estado'})
-        MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
-          ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
-          ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
-    ",
-    'neo4j',
-    'write',
-    'Actualiza el estado de la temperatura de una Lectura basada en su valor y el rango de la etapa asociada'
+    // Actualizar o crear la relación HAS_VALUE para el estado
+    MATCH (slEstado:Slot {name:'estado'})
+    MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
+      ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
+      ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
+  ",
+  'neo4j',
+  'write',
+  'Actualiza el estado de la temperatura de una Lectura basada en su valor y el rango de la etapa asociada'
 );
 
 // SP para actualizar el estado de los actuadores
 CALL apoc.custom.installProcedure(
-    'actualizarEstadosActuadores(corridaId :: STRING) :: VOID',
-    "
-        MATCH (corrida:Corrida {id:$corridaId})
-        WHERE corrida:Corrida
+  'actualizarEstadosActuadores() :: VOID',
+  "
+    // Obtenemos corrida actual
+    MATCH (corrida:Corrida)
+    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    WHERE r IS NULL OR r.value IS NULL
+    // MATCH (corrida:Corrida {id:$corridaId})
 
-        // Obtener la última lectura asociada a la corrida
-        MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
-        WHERE lectura:Lectura
+    // Obtener la última lectura asociada a la corrida
+    MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
 
-        // Obtener la tendencia de la lectura
-        MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
-        WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
+    // Obtener la tendencia de la lectura
+    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+    WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
 
-        // Obtener los actuadores asociados a la corrida
-        MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
-        MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
+    // Obtener los actuadores asociados a la corrida
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
 
-        // Obtener la capacidad de los actuadores
-        MATCH (calefactor)-[capRelCal:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-        MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+    // Obtener la capacidad de los actuadores
+    MATCH (calefactor)-[capRelCal:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+    MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
 
-        // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
-        WITH corrida, tendencia, now,
-             calefactor, ventilador,
-             toFloat(capRelCal.value)  AS capCal,
-             toFloat(capRelVent.value) AS capVent
+    // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
+    WITH corrida, tendencia, now,
+          calefactor, ventilador,
+          toFloat(capRelCal.value)  AS capCal,
+          toFloat(capRelVent.value) AS capVent
 
-        // Calcular estados segun la logica dada
-        WITH tendencia, now, calefactor, ventilador, capCal, capVent,
-             CASE
-               WHEN tendencia > 0 THEN true
-               WHEN tendencia < 0 AND tendencia > capVent THEN true
-               ELSE false
-             END AS estadoCalefactor,
-             CASE
-               WHEN tendencia < 0 THEN true
-               WHEN tendencia > 0 AND tendencia < capCal THEN true
-               ELSE false
-             END AS estadoVentilador
+    // Calcular estados segun la logica dada
+    WITH tendencia, now, calefactor, ventilador, capCal, capVent,
+          CASE
+            WHEN tendencia > 0 THEN true
+            WHEN tendencia < 0 AND tendencia > capVent THEN true
+            ELSE false
+          END AS estadoCalefactor,
+          CASE
+            WHEN tendencia < 0 THEN true
+            WHEN tendencia > 0 AND tendencia < capCal THEN true
+            ELSE false
+          END AS estadoVentilador
 
-        UNWIND [
-          {actuador: calefactor, nuevoEstado: estadoCalefactor},
-          {actuador: ventilador, nuevoEstado: estadoVentilador}
-        ] AS actData
-        WITH now, actData.actuador AS actuador, actData.nuevoEstado AS nuevoEstado
-    
+    UNWIND [
+      {actuador: calefactor, nuevoEstado: estadoCalefactor},
+      {actuador: ventilador, nuevoEstado: estadoVentilador}
+    ] AS actData
+    WITH now, actData.actuador AS actuador, actData.nuevoEstado AS nuevoEstado
 
-        // Actualizar o crear la relación HAS_VALUE para el estado del actuador
-        MATCH (slActivo:Slot {name:'activo'})
-        MERGE (actuador)-[activoRel:HAS_VALUE {slot:'activo'}]->(slActivo)
-          ON CREATE SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
-          ON MATCH SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
-    ",
-    'neo4j',
-    'write',
-    'Actualiza el estado de los actuadores asociados a una Corrida basada en la tendencia de la última Lectura'
+
+    // Actualizar o crear la relación HAS_VALUE para el estado del actuador
+    MATCH (slActivo:Slot {name:'activo'})
+    MERGE (actuador)-[activoRel:HAS_VALUE {slot:'activo'}]->(slActivo)
+      ON CREATE SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
+      ON MATCH SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
+  ",
+  'neo4j',
+  'write',
+  'Actualiza el estado de los actuadores asociados a una Corrida basada en la tendencia de la última Lectura'
 );
 
 // SP para evaluar alertas
 CALL apoc.custom.installProcedure(
-  'actualizarAlertas(corridaId :: STRING) :: VOID',
-  "
-    MATCH (corrida:Corrida {id:$corridaId})
+  'actualizarAlertas() :: VOID',
+  " 
+    // Obtenemos corrida actual
+    MATCH (corrida:Corrida)
+    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    WHERE r IS NULL OR r.value IS NULL
+    // MATCH (corrida:Corrida {id:$corridaId})
 
     // Obtenemos las alertas activas de la corrida
     OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)-[:INSTANCE_OF]->(fc:FrameClass)
@@ -221,36 +227,65 @@ CALL apoc.custom.installProcedure(
 
 // SP para evaluar recomendaciones
 CALL apoc.custom.installProcedure(
-  'actualizarRecomendaciones(corridaId :: STRING) :: VOID',
+  'actualizarRecomendaciones() :: VOID',
   "
-    MATCH (corrida:Corrida {id:$corridaId})
+    // Obtenemos corrida actual
+    MATCH (corrida:Corrida)
+    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    WHERE r IS NULL OR r.value IS NULL
+    // MATCH (corrida:Corrida {id:$corridaId})
+    
+    // Quitamos todas las recomendaciones existentes
+    OPTIONAL MATCH (corrida)-[rRecomendacion:RECOMIENDA]->(:Recomendacion)
+    OPTIONAL MATCH (corrida)-[rHasRec:HAS_VALUE {slot:'recomendaciones'}]->(:Slot)
+    DELETE rRecomendacion, rHasRec
 
-    // Obtenemos las recomendaciones activas de la corrida
-    OPTIONAL MATCH (corrida)-[:RECOMENDACION]->(reco:Recomendacion)-[:INSTANCE_OF]->(fc:FrameClass)
-    WHERE EXISTS((reco)-[:HAS_VALUE {slot: 'activo', value: true}]->())
-    WITH corrida, collect(fc.name) AS recomendacionesActivas
+    WITH corrida
+
+    // Obtenemos los actuadores asociados a la corrida
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
+    MATCH (calefactor)-[rCalefactorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
+    MATCH (ventilador)-[rVentiladorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
 
     // Obtener la última lectura asociada a la corrida
     MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
-    WHERE lectura:Lectura
 
-    // Obtenemos la tendencia de la lectura
-    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+    // Obtenemos slot recomendacion
+    MATCH (sRecomendaciones:Slot {name:'recomendaciones'})
 
-    // Obtenemos las clases de recomendacion
-    MATCH (cSubirTemp:FrameClass {name:'SubirTemperatura'})
-    MATCH (cBajarTemp:FrameClass {name:'BajarTemperatura'})
+    // Obtenemos el estado de la temperatura 
+    MATCH (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(:Slot)
+    WITH corrida, calefactor, ventilador, estadoRel.value AS estadoTemp, datetime() AS now, 
+         toBoolean(rCalefactorActivo.value) AS calefactorActivo,
+         toBoolean(rVentiladorActivo.value) AS ventiladorActivo,
+         sRecomendaciones
 
-    // Obtenemos slots comunes
-    MATCH (sName:Slot {name:'name'})
-    MATCH (sExplicacion:Slot {name:'explicacion'})
-    MATCH (sActivo:Slot {name:'activo'})
-    MATCH (sTs:Slot {name:'ts'})
-    MATCH (sPrioridad:Slot {name:'prioridad'})
-    MATCH (sConflictaCon:Slot {name:'conflictaCon'})
+    
+    // === REGLA_ENCENDER_VENTILADOR ===
+    CALL {
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
+      WHERE estadoTemp = 'TemperaturaAlta' AND NOT ventiladorActivo 
 
-    MATCH (slRecomendaciones:Slot {name:'recomendaciones'})
-    WITH corrida, tendRel.value AS tendencia, datetime() AS now, cSubirTemp, cBajarTemp, sName, sExplicacion, sActivo, sTs, sPrioridad, sConflictaCon, slRecomendaciones, recomendacionesActivas
+      MATCH (reco:Recomendacion {id: 'encender_ventilador'}) 
+      MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+    }
+
+    // // Obtenemos las clases de recomendacion
+    // MATCH (cSubirTemp:FrameClass {name:'SubirTemperatura'})
+    // MATCH (cBajarTemp:FrameClass {name:'BajarTemperatura'})
+
+    // // Obtenemos slots comunes
+    // MATCH (sName:Slot {name:'name'})
+    // MATCH (sExplicacion:Slot {name:'explicacion'})
+    // MATCH (sActivo:Slot {name:'activo'})
+    // MATCH (sTs:Slot {name:'ts'})
+    // MATCH (sPrioridad:Slot {name:'prioridad'})
+    // MATCH (sConflictaCon:Slot {name:'conflictaCon'})
+
+    // MATCH (slRecomendaciones:Slot {name:'recomendaciones'})
+    // WITH corrida, tendRel.value AS tendencia, datetime() AS now, cSubirTemp, cBajarTemp, sName, sExplicacion, sActivo, sTs, sPrioridad, sConflictaCon, slRecomendaciones, recomendacionesActivas
 
     // === RECOMENDACION DE SUBIR TEMPERATURA ===
   ",
