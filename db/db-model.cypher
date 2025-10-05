@@ -1,6 +1,7 @@
-// ==================== Procedures =====================
+// =================== 'system' DB ===================
 :use system;
 
+// ==================== Procedures =====================
 // Borrar procedimientos almacenados existentes (si los hay)
 CALL apoc.custom.dropAll('neo4j');
 
@@ -258,8 +259,10 @@ CALL apoc.custom.installProcedure(
   'Evalúa y crea las recomendaciones asociadas a una Corrida'
 );
 
-:use neo4j;
 
+
+// ==================== 'neo4j' DB ===================
+:use neo4j;
 
 // Esquema
 CREATE CONSTRAINT frame_class_constraint IF NOT EXISTS FOR (c:FrameClass) REQUIRE c.name IS UNIQUE;
