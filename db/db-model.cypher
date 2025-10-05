@@ -109,18 +109,15 @@ CALL apoc.custom.installProcedure(
         WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
 
         // Obtener los actuadores asociados a la corrida
-        MATCH (corrida)-[actRel:HAS_VALUE {slot:'actuadores'}]->(:Slot)
-        WITH corrida, tendencia, now, actRel.value AS actuadoresIds
-        UNWIND actuadoresIds AS actId
-        MATCH (actuador:Actuador {id:actId})
-        WHERE actuador:Actuador
+        MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
+        MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
 
-        // Obtener la capacidad del actuador
-        MATCH (actuador)-[capRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-        WITH corrida, tendencia, now, actuador, toFloat(capRel.value) AS capacidad
+        // Obtener la capacidad de los actuadores
+        MATCH (calefactor)-[capRelCal:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+        MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
 
         // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
-        WITH corrida, tendencia, now, actuador, capacidad,
+        WITH corrida, tendencia, now, calefactor, ventilador, toFloat(capRelCal.value) AS capacidadCalefactor, toFloat(capRelVent.value) AS capacidadVentilador
              CASE 
                WHEN capacidad > 0 THEN 
                  CASE 
