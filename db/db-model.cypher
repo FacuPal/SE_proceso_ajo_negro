@@ -117,22 +117,30 @@ CALL apoc.custom.installProcedure(
         MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
 
         // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
-        WITH corrida, tendencia, now, calefactor, ventilador, toFloat(capRelCal.value) AS capacidadCalefactor, toFloat(capRelVent.value) AS capacidadVentilador
-             CASE 
-               WHEN capacidad > 0 THEN 
-                 CASE 
-                   WHEN tendencia > 0 THEN true
-                   WHEN tendencia < 0 AND tendencia > capacidad THEN true
-                   ELSE false
-                 END
-               WHEN capacidad < 0 THEN 
-                 CASE
-                   WHEN tendencia > 0 AND tendencia < -capacidad THEN true
-                   WHEN tendencia < 0 THEN true
-                   ELSE false
-                 END
+        WITH corrida, tendencia, now,
+             calefactor, ventilador,
+             toFloat(capRelCal.value)  AS capCal,
+             toFloat(capRelVent.value) AS capVent
+
+        // Calcular estados segun la logica dada
+        WITH tendencia, now, calefactor, ventilador, capCal, capVent,
+             CASE
+               WHEN tendencia > 0 THEN true
+               WHEN tendencia < 0 AND tendencia > capVent THEN true
                ELSE false
-             END AS nuevoEstado
+             END AS estadoCalefactor,
+             CASE
+               WHEN tendencia < 0 THEN true
+               WHEN tendencia > 0 AND tendencia < capCal THEN true
+               ELSE false
+             END AS estadoVentilador
+
+        UNWIND [
+          {actuador: calefactor, nuevoEstado: estadoCalefactor},
+          {actuador: ventilador, nuevoEstado: estadoVentilador}
+        ] AS actData
+        WITH now, actData.actuador AS actuador, actData.nuevoEstado AS nuevoEstado
+    
 
         // Actualizar o crear la relación HAS_VALUE para el estado del actuador
         MATCH (slActivo:Slot {name:'activo'})
@@ -145,7 +153,87 @@ CALL apoc.custom.installProcedure(
     'Actualiza el estado de los actuadores asociados a una Corrida basada en la tendencia de la última Lectura'
 );
 
-// SP para evaluar alertas 
+// SP para evaluar alertas
+CALL apoc.custom.installProcedure(
+  'actualizarAlertas(corridaId :: STRING) :: VOID',
+  "
+    MATCH (corrida:Corrida {id:$corridaId})
+    WHERE corrida:Corrida
+
+    // Obtenemos las alertas activas de la corrida
+    OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)
+    OPTIONAL MATCH (alerta)-[:INSTANCE_OF]->(fc:FrameClass)
+    OPTIONAL MATCH (alerta)-[rActivo:HAS_VALUE {slot: 'activo'}]->()
+    WHERE alerta:Alerta AND rActivo.value = true
+    WITH corrida, collect(fc.name) AS alertasActivas
+    
+    // Obtener la última lectura asociada a la corrida
+    MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
+    WHERE lectura:Lectura
+
+    // Obtenemos la tendencia de la lectura
+    MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
+
+    // Obtenemos las clases de alerta
+    MATCH (cIncendio:FrameClass {name:'Incendio'})
+    MATCH (cPA:FrameClass {name:'PuertaAbierta'})
+
+    // Obtenemos slots comunes
+    MATCH (sName:Slot {name:'name'})
+    MATCH (sExplicacion:Slot {name:'explicacion'})
+    MATCH (sActivo:Slot {name:'activo'})
+    MATCH (sTs:Slot {name:'ts'})
+
+    MATCH (slAlertas:Slot {name:'alertas'})
+    WITH corrida, tendRel.value AS tendencia, datetime() AS now, cIncendio, cPA, sName, sExplicacion, sActivo, sTs, slAlertas,alertasActivas
+
+    // Evaluamos creación de alerta de incendio y la activamos sólo si no existe una activa
+    FOREACH (_ IN CASE WHEN tendencia > 30.0 AND NOT 'Incendio' IN alertasActivas THEN [1] ELSE [] END |
+      MERGE (alertaInc:FrameInstance:Alerta {id: 'alerta_incendio_' + corrida.id})
+      ON CREATE SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
+      ON MATCH  SET alertaInc.ts = now, alertaInc.source='proc_actualizarAlertas'
+      MERGE (alertaInc)-[:INSTANCE_OF]->(cIncendio)
+      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaInc.id, ts:now, source:'proc_actualizarAlertas'}]->(sAlertas)
+      MERGE (alertaInc)-[:HAS_VALUE {slot:'name', value:'Alerta de Incendio', ts:now, source:'proc_actualizarAlertas'}]->(sName)
+      MERGE (alertaInc)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está subiendo bruscamente (' + tendencia + '°C/min). Hay un posible incendio.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
+      MERGE (alertaInc)-[:HAS_VALUE {slot:'activo', value:true, ts:now, source:'proc_actualizarAlertas'}]->(sActivo)
+      MERGE (alertaInc)-[:HAS_VALUE {slot:'ts', value:now, ts:now, source:'proc_actualizarAlertas'}]->(sTs)
+    )
+
+    // Evaluamos desactivación de alerta de incendio si la tendencia ya no es alta
+    FOREACH (_ IN CASE WHEN tendencia <= 30.0 AND 'Incendio' IN alertasActivas THEN [1] ELSE [] END |
+      MATCH (alertaInc:FrameInstance:Alerta {id: 'alerta_incendio_' + corrida.id})
+      MERGE (alertaInc)-[rActivo:HAS_VALUE {slot:'activo'}]->(sActivo)
+      ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+      ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+    )
+
+    // Evaluamos creación de alerta de puerta abierta y la activamos sólo si no existe una activa
+    FOREACH (_ IN CASE WHEN tendencia < -3.0 AND NOT 'PuertaAbierta'  IN alertasActivas THEN [1] ELSE [] END |
+      MERGE (alertaPA:FrameInstance:Alerta {id: 'alerta_puerta_abierta_' + corrida.id})
+      ON CREATE SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
+      ON MATCH  SET alertaPA.ts = now, alertaPA.source='proc_actualizarAlertas'
+      MERGE (alertaPA)-[:INSTANCE_OF]->(cPA)
+      MERGE (corrida)-[:HAS_VALUE {slot:'alertas', value:alertaPA.id, ts:now, source:'proc_actualizarAlertas'}]->(sAlertas)
+      MERGE (alertaPA)-[:HAS_VALUE {slot:'name', value:'Alerta de Puerta Abierta', ts:now, source:'proc_actualizarAlertas'}]->(sName)
+      MERGE (alertaPA)-[:HAS_VALUE {slot:'explicacion', value:'La temperatura está bajando bruscamente (' + tendencia + '°C/min). Posiblemente la puerta está abierta.', ts:now, source:'proc_actualizarAlertas'}]->(sExplicacion)
+      MERGE (alertaPA)-[:HAS_VALUE {slot:'activo', value:true, ts:now, source:'proc_actualizarAlertas'}]->(sActivo)
+      MERGE (alertaPA)-[:HAS_VALUE {slot:'ts', value:now, ts:now, source:'proc_actualizarAlertas'}]->(sTs)
+    )
+
+    // Evaluamos desactivación de alerta de puerta abierta si la tendencia ya no es baja
+    FOREACH (_ IN CASE WHEN tendencia >= -3.0 AND 'PuertaAbierta' IN alertasActivas THEN [1] ELSE [] END |
+      MATCH (alertaPA:FrameInstance:Alerta {id: 'alerta_puerta_abierta_' + corrida.id})
+      MERGE (alertaPA)-[rActivo:HAS_VALUE {slot:'activo'}]->(sActivo)
+      ON CREATE SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+      ON MATCH  SET rActivo.value = false, rActivo.ts = now, rActivo.source='proc_actualizarAlertas'
+    )
+    
+  ",
+  'neo4j',
+  'write',
+  'Evalúa y crea las alertas asociadas a una Corrida'
+);
 
 // SP para evaluar recomendaciones
 

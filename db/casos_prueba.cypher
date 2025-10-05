@@ -232,3 +232,22 @@ MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
   ON CREATE SET lvEt.value = etapa.id, lvEt.ts = now
   ON MATCH  SET lvEt.value = etapa.id, lvEt.ts = now
 MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(etapa);
+
+
+
+
+
+//:param corrida_id=>'corrida_2025_10_03_01';
+// Verificar el estado actual de la Corrida, Lecturas, Actuadores y Alertas
+MATCH (c:Corrida)-[:HAS_VALUE]->(sc:Slot)
+OPTIONAL MATCH (l:Lectura)-[:HAS_VALUE]->(sl:Slot)
+MATCH (e:Etapa)
+MATCH (r:Rango)
+MATCH (a:Actuador)-[:HAS_VALUE]->(sa:Slot)
+OPTIONAL MATCH (al:Alerta)
+RETURN c, l, e, r, sc, sl, a, sa, al;
+
+
+// Modificar la tendencia de la lectura 
+MATCH (l:Lectura {id: 'lectura_2025_10_03_01'})-[rTend:HAS_VALUE {slot: 'tendencia'}]->()
+SET rTend.value = -1;
