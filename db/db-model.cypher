@@ -1,3 +1,46 @@
+// ==================== Procedures =====================
+// :use system;
+
+// // Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
+// CALL apoc.custom.installProcedure(
+//     'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
+//     "
+//         UNWIND coalesce($rels,[]) AS rel
+//         WITH rel
+//         WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
+//         WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
+//         WHERE lectura:Lectura AND corridaId IS NOT NULL 
+//         MATCH (corrida:Corrida {id:corridaId})
+//         MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
+//         ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+//         ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
+//         RETURN count(*) AS created
+//     ",
+//     'neo4j',
+//     'write',
+//     'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
+// );
+// CALL apoc.custom.installProcedure(
+//     'relacionarLecturaEtapaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
+//     "
+//         UNWIND coalesce($rels,[]) AS rel
+//         WITH rel
+//         WHERE type(rel)='HAS_VALUE' AND rel.slot='etapa'
+//         WITH rel, startNode(rel) AS lectura, rel.value AS etapaId
+//         WHERE lectura:Lectura AND etapaId IS NOT NULL 
+//         MATCH (etapa:Etapa {id:etapaId})
+//         MERGE (lectura)-[r:EN_ETAPA {slot:'etapa'}]->(etapa)
+//         ON CREATE SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
+//         ON MATCH  SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
+//         RETURN count(*) AS created
+//     ",
+//     'neo4j',
+//     'write',
+//     'Crea relaciones EN_ETAPA desde Lectura a Etapa a partir de HAS_VALUE slot:etapa'
+// );
+// :use neo4j;
+
+
 // Esquema
 CREATE CONSTRAINT frame_class_constraint IF NOT EXISTS FOR (c:FrameClass) REQUIRE c.name IS UNIQUE;
 CREATE CONSTRAINT frame_instance_constraint IF NOT EXISTS FOR (i:FrameInstance) REQUIRE i.id IS UNIQUE;
@@ -20,7 +63,6 @@ MERGE (Recomendacion:FrameClass {name:'Recomendacion'})
 // ===================== Slots (globales por nombre) =====================
 // Comunes
 MERGE (slName:Slot {name:'name'})
-// MERGE (slId:Slot {name:'id'})
 MERGE (slTs:Slot {name:'ts'})
 
 
@@ -282,47 +324,7 @@ MERGE (recM)-[:CONFLICTA_CON]->(recAV)
 MERGE (recM)-[:CONFLICTA_CON]->(recEC)
 MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
-// ==================== Procedures =====================
-// :use system;
 
-// // Procedures para relaciones no canonicas: EN_ETAPA y DE_CORRIDA
-// CALL apoc.custom.installProcedure(
-//     'relacionarLecturaCorridaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
-//     "
-//         UNWIND coalesce($rels,[]) AS rel
-//         WITH rel
-//         WHERE type(rel)='HAS_VALUE' AND rel.slot='corrida'
-//         WITH rel, startNode(rel) AS lectura, rel.value AS corridaId
-//         WHERE lectura:Lectura AND corridaId IS NOT NULL 
-//         MATCH (corrida:Corrida {id:corridaId})
-//         MERGE (lectura)-[r:DE_CORRIDA {slot:'corrida'}]->(corrida)
-//         ON CREATE SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-//         ON MATCH  SET r.source='proc_relacionarLecturaCorridaRels', r.ts=datetime()
-//         RETURN count(*) AS created
-//     ",
-//     'neo4j',
-//     'write',
-//     'Crea relaciones DE_CORRIDA desde Lectura a Corrida a partir de HAS_VALUE slot:corrida'
-// );
-// CALL apoc.custom.installProcedure(
-//     'relacionarLecturaEtapaRels(rels :: LIST OF RELATIONSHIP) :: VOID',
-//     "
-//         UNWIND coalesce($rels,[]) AS rel
-//         WITH rel
-//         WHERE type(rel)='HAS_VALUE' AND rel.slot='etapa'
-//         WITH rel, startNode(rel) AS lectura, rel.value AS etapaId
-//         WHERE lectura:Lectura AND etapaId IS NOT NULL 
-//         MATCH (etapa:Etapa {id:etapaId})
-//         MERGE (lectura)-[r:EN_ETAPA {slot:'etapa'}]->(etapa)
-//         ON CREATE SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
-//         ON MATCH  SET r.source='proc_relacionarLecturaEtapaRels', r.ts=datetime()
-//         RETURN count(*) AS created
-//     ",
-//     'neo4j',
-//     'write',
-//     'Crea relaciones EN_ETAPA desde Lectura a Etapa a partir de HAS_VALUE slot:etapa'
-// );
-// :use neo4j;
 // ===================== Triggers =====================
 // Trigger para agregar relacion no canonica ETAPA_ACTUAL desde Corrida a Etapa
 CALL apoc.trigger.add('relacionarCorridaEtapa',
@@ -340,7 +342,7 @@ CALL apoc.trigger.add('relacionarCorridaEtapa',
     RETURN count(*) AS created
     ", {phase:'afterAsync'});
 
-// Trgger para no permitir agregar Lecturas a una Corrida que ya está finalizada
+// Trigger para no permitir agregar Lecturas a una Corrida que ya está finalizada
 CALL apoc.trigger.add('verificarCorridaActiva',
   "
     UNWIND coalesce($createdRelationships, []) AS rel
@@ -405,7 +407,6 @@ CALL apoc.trigger.add('unaCorridaActiva',
     RETURN count(otrasCorridas) AS numOtrasCorridas
     ", {phase:'before'});
 
-// MERGE (dActMinMax:Daemon {name:'actualizarMinimoMaximo'})
 // Trigger para actualizar minimo y maximo al cambiar VE o Tol en un Rango
 CALL apoc.trigger.add('actualizarMinimoMaximo',
   "
@@ -472,14 +473,13 @@ CALL apoc.trigger.add('actualizarTemperatura',
     WITH corrida, newLectura, valTs, valUltTs, datetime() AS now, rUltLect, ultimaLectura
     WHERE ultimaLectura IS NULL OR valUltTs.value IS NULL OR valTs.value > valUltTs.value
 
-    CALL apoc.log.info('Trigger actualizarTemperatura: Nueva lectura ' + newLectura.id + ' para corrida ' + corrida.id + ' es más reciente que la última lectura actual ' + (CASE WHEN ultimaLectura IS NULL THEN 'N/A' ELSE ultimaLectura.id END))
-
     WITH corrida, newLectura, now, rUltLect
 
     MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(:Slot {name:'ultimaLectura'})
        ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
        ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
+    // Borramos las relaciones ULTIMA_LECTURA existentes y creamos la nueva
     WITH corrida, newLectura, now
     OPTIONAL MATCH (corrida)-[rUltLectOld:ULTIMA_LECTURA]->()
     DELETE rUltLectOld
@@ -487,11 +487,77 @@ CALL apoc.trigger.add('actualizarTemperatura',
     MERGE (corrida)-[rUltLect:ULTIMA_LECTURA {slot:'ultimaLectura'}]->(newLectura)
       ON CREATE SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
       ON MATCH  SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
-    // WITH corrida, newLectura, now, rUltLect
-    // CALL apoc.refactor.to(rUltLect, newLectura) YIELD output as relNew
-    //   SET relNew.ts = now, relNew.source='trigger_actualizarTemperatura'
+
+    // Llamar al SP para actualizar el estado de la temperatura
+    
+    // Llamar al SP para actualizar el estado de los actuadores
+
+    // Llamar al SP para evaluar alertas 
+
+    // Llamar al SP para evaluar recomendaciones
 
 ", {phase:'afterAsync'});
+
+// ==================== Procedures =====================
+:use system;
+
+// SP para actualizar el estado de la temperatura
+
+CALL apoc.custom.installProcedure(
+    'actualizarEstadoTemperatura(lecturaId :: STRING) :: VOID',
+    "
+        MATCH (lectura:Lectura {id:$lecturaId})
+        WHERE lectura:Lectura
+        // Obtener la temperatura interna de la lectura
+        MATCH (lectura)-[tempRel:HAS_VALUE {slot:'temperaturaInterna'}]->(:Slot)
+        WITH lectura, toFloat(tempRel.value) AS tempInt
+
+        // Obtener la etapa asociada a la lectura
+        MATCH (lectura)-[etRel:HAS_VALUE {slot:'etapa'}]->(:Slot)
+        WITH lectura, tempInt, etRel.value AS etapaId
+        MATCH (etapa:Etapa {id:etapaId})
+        WHERE etapa:Etapa
+
+        // Obtener el rango de temperatura asociado a la etapa
+        MATCH (etapa)-[rangoRel:HAS_VALUE {slot:'configuracionTemperatura'}]->(:Slot)
+        WITH lectura, tempInt, rangoRel.value AS rangoId
+        MATCH (rango:Rango {id:rangoId})
+        WHERE rango:Rango
+
+        // Obtener los valores de minimo y maximo del rango
+        MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
+        MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
+        WITH lectura, tempInt,
+             toFloat(minRel.value) AS minTemp,
+             toFloat(maxRel.value) AS maxTemp,
+             datetime() AS now
+
+        // Determinar el nuevo estado basado en la temperatura interna y el rango
+        WITH lectura, tempInt, minTemp, maxTemp, now,
+             CASE 
+               WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
+               WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
+               ELSE 'TemperaturaEnRango'
+             END AS nuevoEstado
+
+        // Actualizar o crear la relación HAS_VALUE para el estado
+        MATCH (slEstado:Slot {name:'estado'})
+        MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
+          ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
+          ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
+    ",
+    'neo4j',
+    'write',
+    'Actualiza el estado de la temperatura de una Lectura basada en su valor y el rango de la etapa asociada'
+);
+// SP para actualizar el estado de los actuadores
+
+// SP para evaluar alertas 
+
+// SP para evaluar recomendaciones
+
+:use neo4j;
+
 
 // // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
 // CALL apoc.trigger.add('actualizarEstadosActuadores',
@@ -558,5 +624,3 @@ CALL apoc.trigger.add('actualizarTemperatura',
 // // MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
 // // MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
 // // MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
-
-
