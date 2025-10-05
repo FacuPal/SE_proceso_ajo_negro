@@ -260,14 +260,13 @@ CALL apoc.custom.installProcedure(
          toBoolean(rCalefactorActivo.value) AS calefactorActivo,
          toBoolean(rVentiladorActivo.value) AS ventiladorActivo,
          sRecomendaciones
-
     
     // === REGLA_ENCENDER_VENTILADOR ===
     CALL {
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
-      WHERE estadoTemp = 'TemperaturaAlta' AND NOT ventiladorActivo 
-
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones           
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones            
+      WHERE estadoTemp = 'TemperaturaAlta' AND NOT ventiladorActivo
+      
       MATCH (reco:Recomendacion {id: 'encender_ventilador'}) 
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
     }

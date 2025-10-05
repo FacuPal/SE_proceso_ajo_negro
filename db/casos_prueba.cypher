@@ -251,3 +251,8 @@ RETURN c, l, e, r, sc, sl, a, sa, al;
 // Modificar la tendencia de la lectura 
 MATCH (l:Lectura {id: 'lectura_2025_10_03_01'})-[rTend:HAS_VALUE {slot: 'tendencia'}]->()
 SET rTend.value = -1;
+
+// Modificar tendencia de la última lectura de la corrida
+MATCH (c:Corrida)-[:ULTIMA_LECTURA]->(l:Lectura)
+MATCH (l)-[r:HAS_VALUE {slot: 'tendencia'}]->()
+SET r.value = 0.5;
