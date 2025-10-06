@@ -269,6 +269,9 @@ CALL apoc.custom.installProcedure(
       
       MATCH (reco:Recomendacion {id: 'encender_ventilador'}) 
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+      MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
     }
 
     // === REGLA_APAGAR_VENTILADOR ===
@@ -278,6 +281,9 @@ CALL apoc.custom.installProcedure(
       WHERE ventiladorActivo AND estadoTemp <> 'TemperaturaAlta'
       MATCH (reco:Recomendacion {id: 'apagar_ventilador'})
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+      MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
     }
 
     // === REGLA_ENCENDER_CALECTOR ===
@@ -287,6 +293,9 @@ CALL apoc.custom.installProcedure(
       WHERE NOT calefactorActivo AND estadoTemp = 'TemperaturaBaja'
       MATCH (reco:Recomendacion {id: 'encender_calefactor'}) 
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+      MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
     }
 
     // === REGLA_APAGAR_CALECTOR ===
@@ -296,6 +305,9 @@ CALL apoc.custom.installProcedure(
       WHERE calefactorActivo AND estadoTemp <> 'TemperaturaBaja'
       MATCH (reco:Recomendacion {id: 'apagar_calefactor'})
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+      MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime() 
     }
 
     // == REGLA_MANTENER_ESTADO_ACTUAL ===
@@ -307,6 +319,9 @@ CALL apoc.custom.installProcedure(
       OR (estadoTemp = 'TemperaturaBaja' AND calefactorActivo)
       MATCH (reco:Recomendacion {id: 'mantener_estado_actual'})
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+      MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
+      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
     }
 
     // Ordenar por prioridad y quitar las recomendaciones conflictivas con menor prioridad
@@ -606,6 +621,10 @@ MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 
 // ===================== Triggers =====================
+CALL apoc.util.sleep(2000); // Esperar a que se creen los índices y constraints
+// Borrar triggers existentes (si los hay)
+CALL apoc.trigger.removeAll();
+
 // Trigger para agregar relacion no canonica ETAPA_ACTUAL desde Corrida a Etapa
 CALL apoc.trigger.add('relacionarCorridaEtapa',
   "
@@ -816,9 +835,10 @@ CALL apoc.trigger.add('actualizarTemperatura',
       ON CREATE SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
       ON MATCH  SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
 
+    WITH newLectura, corrida
     // Llamar al SP para actualizar el estado de la temperatura
     CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para actualizar el estado de la temperatura.')
-    CALL custom.actualizarEstadoTemperatura(l.id)
+    CALL custom.actualizarEstadoTemperatura(newLectura.id)
     
     // Llamar al SP para actualizar el estado de los actuadores
     CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para actualizar el estado de los actuadores.')

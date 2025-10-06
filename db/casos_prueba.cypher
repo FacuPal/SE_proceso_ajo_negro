@@ -36,7 +36,9 @@ CALL apoc.util.sleep(1000); // Esperar 1 segundo para diferenciar timestamps
 
 // Crear una Lectura asociada a la Corrida como última lectura 
 // tendencia 2 => Calefactor prendido y ventilador apagado
-MATCH (c:FrameInstance:Corrida {id:'corrida_2025_10_03_01'})-[:ETAPA_ACTUAL]->(etapa:Etapa)
+MATCH (c:Corrida)-[:ETAPA_ACTUAL]->(etapa:Etapa)
+OPTIONAL MATCH (c)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+WHERE r IS NULL OR r.value IS NULL
 MATCH (LectClass:FrameClass {name:'Lectura'})
 MATCH (slLName:Slot {name:'name'})
 MATCH (slTs:Slot {name:'ts'})
@@ -47,12 +49,14 @@ MATCH (slLEtapa:Slot {name:'etapa'})
 MATCH (slLEstado:Slot {name:'estado'})
 MATCH (slUltimaLectura:Slot {name:'ultimaLectura'})
 MATCH (procT:FrameInstance:Etapa {id:'proceso_termico'})
-WITH c, LectClass, slLName, slTs, slTempInt, slTendencia, slLCorrida, slLEtapa, slLEstado, slUltimaLectura, procT, datetime() AS now
+WITH c, LectClass, slLName, slTs, slTempInt, slTendencia, slLCorrida, 
+      slLEtapa, slLEstado, slUltimaLectura, procT, datetime() AS now,
+      86.0 AS tempInt, 2 AS tendencia
 
-MERGE (l:FrameInstance:Lectura {id:'lectura_2025_10_03_01'})-[:INSTANCE_OF]->(LectClass)
+MERGE (l:FrameInstance:Lectura {id:'lectura_' + apoc.create.uuid()})-[:INSTANCE_OF]->(LectClass)
 MERGE (l)-[lvName:HAS_VALUE {slot:'name'}]->(slLName)
-  ON CREATE SET lvName.value = 'Lectura Corrida 2025-10-03 01', lvName.ts = now
-  ON MATCH  SET lvName.value = 'Lectura Corrida 2025-10-03 01', lvName.ts = now
+  ON CREATE SET lvName.value = 'Lectura de ' + c.id, lvName.ts = now
+  ON MATCH  SET lvName.value = 'Lectura de ' + c.id, lvName.ts = now
 
 MERGE (l)-[lvTs:HAS_VALUE {slot:'ts'}]->(slTs)
   ON CREATE SET lvTs.value = now, lvTs.ts = now
@@ -60,33 +64,25 @@ MERGE (l)-[lvTs:HAS_VALUE {slot:'ts'}]->(slTs)
 
 // Valores de ejemplo: temperatura y estado
 MERGE (l)-[lvTemp:HAS_VALUE {slot:'temperaturaInterna'}]->(slTempInt)
-  ON CREATE SET lvTemp.value = 81.0, lvTemp.ts = now
-  ON MATCH  SET lvTemp.value = 81.0, lvTemp.ts = now
+  ON CREATE SET lvTemp.value = tempInt, lvTemp.ts = now
+  ON MATCH  SET lvTemp.value = tempInt, lvTemp.ts = now
 
 MERGE (l)-[lvTend:HAS_VALUE {slot:'tendencia'}]->(slTendencia)
-  ON CREATE SET lvTend.value = 2, lvTend.ts = now
-  ON MATCH  SET lvTend.value = 2, lvTend.ts = now
+  ON CREATE SET lvTend.value = tendencia, lvTend.ts = now
+  ON MATCH  SET lvTend.value = tendencia, lvTend.ts = now
 
-MERGE (l)-[lvEst:HAS_VALUE {slot:'estado'}]->(slLEstado)
-  ON CREATE SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
-  ON MATCH  SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
+// MERGE (l)-[lvEst:HAS_VALUE {slot:'estado'}]->(slLEstado)
+//   ON CREATE SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
+//   ON MATCH  SET lvEst.value = 'TemperaturaEnRango', lvEst.ts = now
 
 // Referencias: corrida y etapa (valor + relación)
 MERGE (l)-[lvCorr:HAS_VALUE {slot:'corrida'}]->(slLCorrida)
   ON CREATE SET lvCorr.value = c.id, lvCorr.ts = now
   ON MATCH  SET lvCorr.value = c.id, lvCorr.ts = now
-// MERGE (l)-[:DE_CORRIDA {slot:'corrida', ts:now}]->(c)
 
 MERGE (l)-[lvEt:HAS_VALUE {slot:'etapa'}]->(slLEtapa)
   ON CREATE SET lvEt.value = 'proceso_termico', lvEt.ts = now
-  ON MATCH  SET lvEt.value = 'proceso_termico', lvEt.ts = now
-// MERGE (l)-[:EN_ETAPA {slot:'etapa', ts:now}]->(procT)
-
-// Marcar como última lectura en Corrida (valor + relación)
-MERGE (c)-[rUL:HAS_VALUE {slot:'ultimaLectura'}]->(slUltimaLectura)
-  ON CREATE SET rUL.value = l.id, rUL.ts = now
-  ON MATCH  SET rUL.value = l.id, rUL.ts = now;
-// MERGE (c)-[rRel:ULTIMA_LECTURA {slot:'ultimaLectura', ts:now}]->(l);
+  ON MATCH  SET lvEt.value = 'proceso_termico', lvEt.ts = now;
 
 
 // -------------------------------------------------------------------//
@@ -245,7 +241,9 @@ MATCH (e:Etapa)
 MATCH (r:Rango)
 MATCH (a:Actuador)-[:HAS_VALUE]->(sa:Slot)
 OPTIONAL MATCH (al:Alerta)
-RETURN c, l, e, r, sc, sl, a, sa, al;
+OPTIONAL MATCH (reco:Recomendacion)
+WHERE c.id = 'corrida_2025_10_03_01'
+RETURN c, l, e, r, sc, sl, a, sa, al, reco;
 
 
 // Modificar la tendencia de la lectura 
