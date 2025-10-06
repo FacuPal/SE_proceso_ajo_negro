@@ -816,88 +816,22 @@ CALL apoc.trigger.add('actualizarTemperatura',
       ON CREATE SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
       ON MATCH  SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
 
-    
-
-
-
-
     // Llamar al SP para actualizar el estado de la temperatura
+    CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para actualizar el estado de la temperatura.')
     CALL custom.actualizarEstadoTemperatura(l.id)
-
+    
     // Llamar al SP para actualizar el estado de los actuadores
+    CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para actualizar el estado de los actuadores.')
     CALL custom.actualizarEstadosActuadores(corrida.id)
 
     // Llamar al SP para evaluar alertas 
+    CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para evaluar alertas.')
     CALL custom.actualizarAlertas(corrida.id)
 
     // Llamar al SP para evaluar recomendaciones
+    CALL apoc.log.info('Trigger actualizarTemperatura: Llamando al SP para evaluar recomendaciones.')
     CALL custom.actualizarRecomendaciones(corrida.id)
-    
+
 ", {phase:'afterAsync'});
 
-
-// // MERGE (dUpdEstadoActuador:Daemon {name:'actualizarEstadosActuadores'})
-// CALL apoc.trigger.add('actualizarEstadosActuadores',
-//   "
-//     UNWIND coalesce($assignedRelationshipProperties.value, {}) AS chg
-//     WITH chg
-//     WHERE chg IS NOT NULL 
-//     UNWIND coalesce(chg, {}) AS chgRel
-//     WITH chgRel.relationship AS newRel
-
-
-//     // Cuando se crea una nueva relación de tipo ULTIMA_LECTURA o se modifica su value
-//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Nueva relación ULTIMA_LECTURA detectada.')
-//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Tipo de relación: ' + type(newRel))
-
-//     WITH newRel, startNode(newRel) AS lectura, endNode(newRel) AS corrida
-//     WHERE lectura:Lectura AND corrida:Corrida AND type(newRel) = 'ULTIMA_LECTURA'
-
-//     CALL apoc.log.info('Trigger actualizarEstadosActuadores: Lectura nueva o actualizada: ' + lectura.id + ' para corrida: ' + corrida.id)
-
-//     // Obtenemos la tendencia de la lectura
-//     MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
-//     WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
-    
-//     // Obtenemos los actuadores
-//     MATCH (calefactor:Actuador {id:'calefactor'})
-//     MATCH (ventilador:Actuador {id:'ventilador'})
-//     MATCH (calefactor)-[capCalRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-//     MATCH (ventilador)-[capVenRel:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-
-//     WITH corrida, tendencia, now, calefactor, ventilador,
-//          toFloat(capCalRel.value) AS capacidadCalefactor,
-//          toFloat(capVenRel.value) AS capacidadVentilador
-    
-//     // Determinamos los estados según las reglas
-//     WITH corrida, tendencia, now, calefactor, ventilador, capacidadCalefactor, capacidadVentilador,
-//          CASE 
-//            WHEN tendencia > 0 THEN true
-//            WHEN tendencia < 0 AND tendencia > capacidadVentilador THEN true
-//            ELSE false
-//          END AS estadoCalefactor,
-//          CASE
-//            WHEN tendencia > 0 AND tendencia < capacidadCalefactor THEN true
-//            WHEN tendencia < 0 THEN true
-//            ELSE false
-//          END AS estadoVentilador
-    
-//     // Actualizamos el estado del calefactor
-//     MATCH (slActuadorActivo:Slot {name:'activo'})
-//     MERGE (calefactor)-[rCalActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
-//       ON CREATE SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
-//       ON MATCH  SET rCalActivo.value = estadoCalefactor, rCalActivo.ts = now, rCalActivo.source='trigger_actualizarEstadosActuadores'
-    
-//     // Actualizamos el estado del ventilador
-//     MERGE (ventilador)-[rVenActivo:HAS_VALUE {slot:'activo'}]->(slActuadorActivo)
-//       ON CREATE SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
-//       ON MATCH  SET rVenActivo.value = estadoVentilador, rVenActivo.ts = now, rVenActivo.source='trigger_actualizarEstadosActuadores'
-    
-//     RETURN count(*) AS updated
-
-// ", {phase:'afterAsync'});
-
-// // MERGE (dUpdEstadoTemp:Daemon {name:'actualizarEstadoTemperatura'})
-// // MERGE (dEvalAlertas:Daemon {name:'evaluarAlertas'})
 // // MERGE (dEvalPrioridadRec:Daemon {name:'evaluarPrioridadRecomendaciones'})
-// // MERGE (dEvalRecomendaciones:Daemon {name:'evaluarRecomendaciones'})
