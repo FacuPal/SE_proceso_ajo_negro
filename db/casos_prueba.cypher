@@ -256,3 +256,19 @@ SET rTend.value = -1;
 MATCH (c:Corrida)-[:ULTIMA_LECTURA]->(l:Lectura)
 MATCH (l)-[r:HAS_VALUE {slot: 'tendencia'}]->()
 SET r.value = 0.5;
+
+
+
+
+
+
+// Actualizar el estado de los actuadores, alertas y recomendaciones para la corrida activa
+MATCH (corrida:Corrida)
+OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+WHERE r IS NULL OR r.value IS NULL
+WITH corrida
+MATCH (c:Corrida)-[:ULTIMA_LECTURA]->(l:Lectura)
+CALL custom.actualizarEstadoTemperatura(l.id)
+CALL custom.actualizarEstadosActuadores(corrida.id)
+CALL custom.actualizarAlertas(corrida.id)
+CALL custom.actualizarRecomendaciones(corrida.id);

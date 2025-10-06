@@ -265,28 +265,51 @@ CALL apoc.custom.installProcedure(
     CALL {
       WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones           
       WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones            
-      WHERE estadoTemp = 'TemperaturaAlta' AND NOT ventiladorActivo
+      WHERE NOT ventiladorActivo AND estadoTemp = 'TemperaturaAlta'
       
       MATCH (reco:Recomendacion {id: 'encender_ventilador'}) 
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
     }
 
-    // // Obtenemos las clases de recomendacion
-    // MATCH (cSubirTemp:FrameClass {name:'SubirTemperatura'})
-    // MATCH (cBajarTemp:FrameClass {name:'BajarTemperatura'})
+    // === REGLA_APAGAR_VENTILADOR ===
+    CALL {
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
+      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
+      WHERE ventiladorActivo AND estadoTemp <> 'TemperaturaAlta'
+      MATCH (reco:Recomendacion {id: 'apagar_ventilador'})
+      MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+    }
 
-    // // Obtenemos slots comunes
-    // MATCH (sName:Slot {name:'name'})
-    // MATCH (sExplicacion:Slot {name:'explicacion'})
-    // MATCH (sActivo:Slot {name:'activo'})
-    // MATCH (sTs:Slot {name:'ts'})
-    // MATCH (sPrioridad:Slot {name:'prioridad'})
-    // MATCH (sConflictaCon:Slot {name:'conflictaCon'})
+    // === REGLA_ENCENDER_CALECTOR ===
+    CALL {
+      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones           
+      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones            
+      WHERE NOT calefactorActivo AND estadoTemp = 'TemperaturaBaja'
+      MATCH (reco:Recomendacion {id: 'encender_calefactor'}) 
+      MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+    }
 
-    // MATCH (slRecomendaciones:Slot {name:'recomendaciones'})
-    // WITH corrida, tendRel.value AS tendencia, datetime() AS now, cSubirTemp, cBajarTemp, sName, sExplicacion, sActivo, sTs, sPrioridad, sConflictaCon, slRecomendaciones, recomendacionesActivas
+    // === REGLA_APAGAR_CALECTOR ===
+    CALL {
+      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones
+      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones
+      WHERE calefactorActivo AND estadoTemp <> 'TemperaturaBaja'
+      MATCH (reco:Recomendacion {id: 'apagar_calefactor'})
+      MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+    }
 
-    // === RECOMENDACION DE SUBIR TEMPERATURA ===
+    // == REGLA_MANTENER_ESTADO_ACTUAL ===
+    CALL {
+      WITH corrida, estadoTemp, now, calefactorActivo, ventiladorActivo, sRecomendaciones
+      WITH corrida, estadoTemp, now, calefactorActivo, ventiladorActivo, sRecomendaciones
+      WHERE estadoTemp = 'TemperaturaEnRango' 
+      OR (estadoTemp = 'TemperaturaAlta' AND ventiladorActivo)
+      OR (estadoTemp = 'TemperaturaBaja' AND calefactorActivo)
+      MATCH (reco:Recomendacion {id: 'mantener_estado_actual'})
+      MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+    }
+
+    // Ordenar por prioridad y quitar las recomendaciones conflictivas con menor prioridad
   ",
   'neo4j',
   'write',
@@ -793,14 +816,23 @@ CALL apoc.trigger.add('actualizarTemperatura',
       ON CREATE SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
       ON MATCH  SET rUltLect.slot = 'ultimaLectura', rUltLect.ts = now, rUltLect.source='trigger_actualizarTemperatura'
 
-    // Llamar al SP para actualizar el estado de la temperatura
     
+
+
+
+
+    // Llamar al SP para actualizar el estado de la temperatura
+    CALL custom.actualizarEstadoTemperatura(l.id)
+
     // Llamar al SP para actualizar el estado de los actuadores
+    CALL custom.actualizarEstadosActuadores(corrida.id)
 
     // Llamar al SP para evaluar alertas 
+    CALL custom.actualizarAlertas(corrida.id)
 
     // Llamar al SP para evaluar recomendaciones
-
+    CALL custom.actualizarRecomendaciones(corrida.id)
+    
 ", {phase:'afterAsync'});
 
 
