@@ -373,7 +373,7 @@ CALL apoc.custom.installProcedure(
   'neo4j',
   'write',  
   'Evalúa las recomendaciones de la corrida y las ajusta de acuerdo a la prioridad de cada recomendación.'
-)
+);
 
 
 
@@ -867,8 +867,8 @@ CALL apoc.trigger.add('actualizarTemperatura',
     WITH corrida, newLectura, now, rUltLect
     MATCH (sUltimaLectura:Slot {name:'ultimaLectura'})
     MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(sUltimaLectura)
-       ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
-       ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
+      ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
+      ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
     // Borramos las relaciones ULTIMA_LECTURA existentes y creamos la nueva
     WITH corrida, newLectura, now
