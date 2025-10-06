@@ -331,6 +331,50 @@ CALL apoc.custom.installProcedure(
   'Evalúa y crea las recomendaciones asociadas a una Corrida'
 );
 
+// SP para evaluar prioridad de recomendaciones
+CALL apoc.custom.installProcedure(
+  'evaluarPrioridadRecomendaciones(corridaId :: STRING) :: VOID',
+  "
+    // Obtenemos corrida actual
+    // MATCH (corrida:Corrida)
+    // OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    // WHERE r IS NULL OR r.value IS NULL
+    MATCH (corrida:Corrida {id:$corridaId})
+
+    // Obtenemos las recomendaciones activas de la corrida
+    MATCH (corrida)-[rRecomendacion:RECOMIENDA]->(reco:Recomendacion)
+    MATCH (reco)-[rPrioridad:HAS_VALUE {slot: 'prioridad'}]->(:Slot)
+    WITH  corrida, collect({reco: reco, prioridad: rPrioridad.value }) AS recomendaciones
+
+    // Ordenar recomendaciones por prioridad descendente 
+    WITH corrida, apoc.coll.sortMulti(recomendaciones, ['prioridad']) AS recomendacionesOrdenadas
+    // WITH corrida, apoc.coll.sortMulti(recomendaciones, ['^prioridad']) AS recomendacionesOrdenadas <-- ascendente
+
+    // Inicializar lista para recomendaciones finales
+    WITH corrida, recomendacionesOrdenadas, [] AS recomendacionesFinales
+
+    // Iterar sobre las recomendaciones ordenadas y filtrar las conflictivas
+    UNWIND recomendacionesOrdenadas AS recData
+    WITH corrida, recData.reco AS reco, recData.prioridad AS prioridad, recomendacionesFinales
+    WHERE NOT ANY(r IN recomendacionesFinales WHERE (reco)-[:HAS_VALUE {slot:'conflictaCon'}]->(:Slot {value:r.id}))
+    WITH corrida, recomendacionesFinales + reco AS nuevasRecomendaciones
+
+    // Actualizar las relaciones RECOMIENDA para que solo queden las no conflictivas con mayor prioridad
+    OPTIONAL MATCH (corrida)-[rOld:RECOMIENDA]->(oldReco:Recomendacion)
+    WHERE NOT oldReco IN nuevasRecomendaciones
+    DELETE rOld
+
+    // Asegurar que las recomendaciones finales estén relacionadas con la corrida
+    UNWIND nuevasRecomendaciones AS finalReco
+    MERGE (corrida)-[rNew:RECOMIENDA {slot:'recomendaciones'}]->(finalReco)
+      ON CREATE SET rNew.source='proc_evaluarPrioridadRecomendaciones', rNew.ts=datetime()
+      ON MATCH  SET rNew.source='proc_evaluarPrioridadRecomendaciones', rNew.ts=datetime()
+  ",
+  'neo4j',
+  'write',  
+  'Evalúa las recomendaciones de la corrida y las ajusta de acuerdo a la prioridad de cada recomendación.'
+)
+
 
 
 // ==================== 'neo4j' DB ===================
@@ -821,8 +865,8 @@ CALL apoc.trigger.add('actualizarTemperatura',
     WHERE ultimaLectura IS NULL OR valUltTs.value IS NULL OR valTs.value > valUltTs.value
 
     WITH corrida, newLectura, now, rUltLect
-
-    MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(:Slot {name:'ultimaLectura'})
+    MATCH (sUltimaLectura:Slot {name:'ultimaLectura'})
+    MERGE (corrida)-[hval:HAS_VALUE {slot:'ultimaLectura'}]->(sUltimaLectura)
        ON CREATE SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
        ON MATCH  SET hval.value = newLectura.id, hval.ts = now, hval.source='trigger_actualizarTemperatura'
 
