@@ -56,13 +56,13 @@ CALL apoc.custom.installProcedure(
 
 // SP para actualizar el estado de los actuadores
 CALL apoc.custom.installProcedure(
-  'actualizarEstadosActuadores() :: VOID',
+  'actualizarEstadosActuadores(corridaId :: STRING) :: VOID',
   "
     // Obtenemos corrida actual
-    MATCH (corrida:Corrida)
-    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
-    WHERE r IS NULL OR r.value IS NULL
-    // MATCH (corrida:Corrida {id:$corridaId})
+    // MATCH (corrida:Corrida)
+    // OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    // WHERE r IS NULL OR r.value IS NULL
+    MATCH (corrida:Corrida {id:$corridaId})
 
     // Obtener la última lectura asociada a la corrida
     MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
@@ -118,13 +118,13 @@ CALL apoc.custom.installProcedure(
 
 // SP para evaluar alertas
 CALL apoc.custom.installProcedure(
-  'actualizarAlertas() :: VOID',
+  'actualizarAlertas(corridaId :: STRING) :: VOID',
   " 
     // Obtenemos corrida actual
-    MATCH (corrida:Corrida)
-    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
-    WHERE r IS NULL OR r.value IS NULL
-    // MATCH (corrida:Corrida {id:$corridaId})
+    // MATCH (corrida:Corrida)
+    // OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    // WHERE r IS NULL OR r.value IS NULL
+    MATCH (corrida:Corrida {id:$corridaId})
 
     // Obtenemos las alertas activas de la corrida
     OPTIONAL MATCH (corrida)-[:ALERTA]->(alerta:Alerta)-[:INSTANCE_OF]->(fc:FrameClass)
@@ -227,13 +227,13 @@ CALL apoc.custom.installProcedure(
 
 // SP para evaluar recomendaciones
 CALL apoc.custom.installProcedure(
-  'actualizarRecomendaciones() :: VOID',
+  'actualizarRecomendaciones(corridaId :: STRING) :: VOID',
   "
     // Obtenemos corrida actual
-    MATCH (corrida:Corrida)
-    OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
-    WHERE r IS NULL OR r.value IS NULL
-    // MATCH (corrida:Corrida {id:$corridaId})
+    // MATCH (corrida:Corrida)
+    // OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+    // WHERE r IS NULL OR r.value IS NULL
+    MATCH (corrida:Corrida {id:$corridaId})
     
     // Quitamos todas las recomendaciones existentes
     OPTIONAL MATCH (corrida)-[rRecomendacion:RECOMIENDA]->(:Recomendacion)
