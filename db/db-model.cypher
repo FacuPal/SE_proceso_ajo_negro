@@ -325,6 +325,7 @@ CALL apoc.custom.installProcedure(
     }
 
     // Ordenar por prioridad y quitar las recomendaciones conflictivas con menor prioridad
+    CALL custom.evaluarPrioridadRecomendaciones(corrida.id)
   ",
   'neo4j',
   'write',
