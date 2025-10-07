@@ -336,39 +336,48 @@ CALL apoc.custom.installProcedure(
   'evaluarPrioridadRecomendaciones(corridaId :: STRING) :: VOID',
   "
     // Obtenemos corrida actual
-    // MATCH (corrida:Corrida)
-    // OPTIONAL MATCH (corrida)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
-    // WHERE r IS NULL OR r.value IS NULL
     MATCH (corrida:Corrida {id:$corridaId})
 
-    // Obtenemos las recomendaciones activas de la corrida
-    MATCH (corrida)-[rRecomendacion:RECOMIENDA]->(reco:Recomendacion)
-    MATCH (reco)-[rPrioridad:HAS_VALUE {slot: 'prioridad'}]->(:Slot)
-    WITH  corrida, collect({reco: reco, prioridad: rPrioridad.value }) AS recomendaciones
+    // Recolectar recomendaciones con su prioridad y sus conflictos (relaciones CONFLICTA_CON)
+    MATCH (corrida)-[:RECOMIENDA]->(reco:Recomendacion)
+    MATCH (reco)-[rPrioridad:HAS_VALUE {slot:'prioridad'}]->(:Slot)
+    OPTIONAL MATCH (reco)-[:CONFLICTA_CON]->(rc:Recomendacion)
+    WITH corrida, reco, toInteger(rPrioridad.value) AS prioridad, collect(DISTINCT rc.id) AS conflictos
+    ORDER BY prioridad DESC
+    WITH corrida, collect({reco:reco, prioridad:prioridad, conflictos:conflictos}) AS recs
 
-    // Ordenar recomendaciones por prioridad descendente 
-    WITH corrida, apoc.coll.sortMulti(recomendaciones, ['prioridad']) AS recomendacionesOrdenadas
-    // WITH corrida, apoc.coll.sortMulti(recomendaciones, ['^prioridad']) AS recomendacionesOrdenadas <-- ascendente
+    // Reducir la lista manteniendo solo la recomendación de mayor prioridad por cada grupo de conflicto
+    WITH corrida,
+         reduce(sel = [], r IN recs |
+           CASE
+             WHEN ANY(x IN sel WHERE r.reco.id IN x.conflictos OR x.reco.id IN r.conflictos) THEN sel
+             ELSE sel + r
+           END
+         ) AS aceptadas
 
-    // Inicializar lista para recomendaciones finales
-    WITH corrida, recomendacionesOrdenadas, [] AS recomendacionesFinales
+    WITH corrida, [r IN aceptadas | r.reco] AS finalRecs
+    MATCH (sRecomendaciones:Slot {name:'recomendaciones'})
 
-    // Iterar sobre las recomendaciones ordenadas y filtrar las conflictivas
-    UNWIND recomendacionesOrdenadas AS recData
-    WITH corrida, recData.reco AS reco, recData.prioridad AS prioridad, recomendacionesFinales
-    WHERE NOT ANY(r IN recomendacionesFinales WHERE (reco)-[:HAS_VALUE {slot:'conflictaCon'}]->(:Slot {value:r.id}))
-    WITH corrida, recomendacionesFinales + reco AS nuevasRecomendaciones
-
-    // Actualizar las relaciones RECOMIENDA para que solo queden las no conflictivas con mayor prioridad
+    // Eliminar recomendaciones descartadas (relaciones RECOMIENDA)
     OPTIONAL MATCH (corrida)-[rOld:RECOMIENDA]->(oldReco:Recomendacion)
-    WHERE NOT oldReco IN nuevasRecomendaciones
+    WHERE NOT oldReco IN finalRecs
     DELETE rOld
 
-    // Asegurar que las recomendaciones finales estén relacionadas con la corrida
-    UNWIND nuevasRecomendaciones AS finalReco
+    WITH corrida, finalRecs, sRecomendaciones
+    // Eliminar HAS_VALUE obsoletos del slot 'recomendaciones'
+    OPTIONAL MATCH (corrida)-[hvOld:HAS_VALUE {slot:'recomendaciones'}]->(sRecomendaciones)
+    WHERE NOT hvOld.value IN [r IN finalRecs | r.id]
+    DELETE hvOld
+
+    WITH corrida, finalRecs, sRecomendaciones
+    // Asegurar recomendaciones finales (RECOMIENDA + HAS_VALUE)
+    UNWIND finalRecs AS finalReco
     MERGE (corrida)-[rNew:RECOMIENDA {slot:'recomendaciones'}]->(finalReco)
       ON CREATE SET rNew.source='proc_evaluarPrioridadRecomendaciones', rNew.ts=datetime()
       ON MATCH  SET rNew.source='proc_evaluarPrioridadRecomendaciones', rNew.ts=datetime()
+    MERGE (corrida)-[hv:HAS_VALUE {slot:'recomendaciones', value:finalReco.id}]->(sRecomendaciones)
+      ON CREATE SET hv.source='proc_evaluarPrioridadRecomendaciones', hv.ts=datetime()
+      ON MATCH  SET hv.source='proc_evaluarPrioridadRecomendaciones', hv.ts=datetime()
   ",
   'neo4j',
   'write',  
