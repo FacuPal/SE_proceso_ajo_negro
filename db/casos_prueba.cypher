@@ -270,3 +270,9 @@ CALL custom.actualizarEstadoTemperatura(l.id)
 CALL custom.actualizarEstadosActuadores(corrida.id)
 CALL custom.actualizarAlertas(corrida.id)
 CALL custom.actualizarRecomendaciones(corrida.id);
+
+
+
+match (c:Corrida)-[]->(sc:Slot)
+match (r:Recomendacion)-[]->(sr:Slot)
+return c, sc, r, sr;
