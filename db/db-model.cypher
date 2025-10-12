@@ -94,45 +94,86 @@ CALL apoc.custom.installProcedure(
     MATCH (lectura)-[tendRel:HAS_VALUE {slot:'tendencia'}]->(:Slot)
     WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
 
-    // Obtener los actuadores asociados a la corrida
-    MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
-    MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
+    // Actualizamos estado calefactor
+    CALL {
+      WITH corrida, tendencia, now
+      MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
 
-    // Obtener la capacidad de los actuadores
-    MATCH (calefactor)-[capRelCal:HAS_VALUE {slot:'capacidad'}]->(:Slot)
-    MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+        // Obtener la capacidad del calefactor
+      MATCH (calefactor)-[capRelCal:HAS_VALUE {slot:'capacidad'}]->(:Slot)
 
-    // Determinar el nuevo estado del actuador basado en la tendencia y su capacidad
-    WITH corrida, tendencia, now,
-          calefactor, ventilador,
-          toFloat(capRelCal.value)  AS capCal,
-          toFloat(capRelVent.value) AS capVent
+      // Obtenemos los slots del calefactor
+      MATCH (calefactor)-[rTipoFuncionPrendido:HAS_VALUE {slot:'tipoFuncionPrendido'}]->(:Slot)
+      MATCH (calefactor)-[rPrendidoMedia:HAS_VALUE {slot:'prendidoMedia'}]->(:Slot)
+      MATCH (calefactor)-[rPrendidoSigma:HAS_VALUE {slot:'prendidoSigma'}]->(:Slot)
+      MATCH (calefactor)-[rTipoFuncionApagado:HAS_VALUE {slot:'tipoFuncionApagado'}]->(s:Slot)
+      MATCH (calefactor)-[rApagadoB:HAS_VALUE {slot:'apagadoB'}]->(:Slot)
+      MATCH (calefactor)-[rApagadoC:HAS_VALUE {slot:'apagadoC'}]->(:Slot)
 
-    // Calcular estados segun la logica dada
-    WITH tendencia, now, calefactor, ventilador, capCal, capVent,
-          CASE
-            WHEN tendencia > 0 THEN true
-            WHEN tendencia < 0 AND tendencia > capVent THEN true
-            ELSE false
-          END AS estadoCalefactor,
-          CASE
-            WHEN tendencia < 0 THEN true
-            WHEN tendencia > 0 AND tendencia < capCal THEN true
-            ELSE false
-          END AS estadoVentilador
+      WITH corrida, tendencia, now, calefactor, toFloat(capRelCal.value) AS capCal,
+          rTipoFuncionPrendido.value AS funcionPrendidoCal,
+          toFloat(rPrendidoMedia.value) AS prendidoMediaCal,
+          toFloat(rPrendidoSigma.value) AS prendidoSigmaCal,
+          rTipoFuncionApagado.value AS funcionApagadoCal,
+          toFloat(rApagadoB.value) AS apagadoBCal,
+          toFloat(rApagadoC.value) AS apagadoCCal
 
-    UNWIND [
-      {actuador: calefactor, nuevoEstado: estadoCalefactor},
-      {actuador: ventilador, nuevoEstado: estadoVentilador}
-    ] AS actData
-    WITH now, actData.actuador AS actuador, actData.nuevoEstado AS nuevoEstado
+      // Determinar el nuevo estado basado en la tendencia
+      WITH corrida, tendencia, now, calefactor, capCal,
+            1 / (1 + exp(-(apagadoCCal) * (tendencia - apagadoBCal))) AS mu_apagado,
+            exp(-((tendencia - prendidoMediaCal)^2) / (2 * (prendidoSigmaCal^2))) AS mu_prendido
 
+      // Actualizar los valores de pertenencia en el calefactor
+      MATCH (slUPrendido:Slot {name:'uPrendido'})
+      MATCH (slUApagado:Slot {name:'uApagado'})
+      MERGE (calefactor)-[uPrendidoRel:HAS_VALUE {slot:'uPrendido'}]->(slUPrendido)
+        ON CREATE SET uPrendidoRel.value = round(mu_prendido, 4), uPrendidoRel.ts = now, uPrendidoRel.source='proc_actualizarEstadosActuadores'
+        ON MATCH  SET uPrendidoRel.value = round(mu_prendido, 4), uPrendidoRel.ts = now, uPrendidoRel.source='proc_actualizarEstadosActuadores'
+      MERGE (calefactor)-[uApagadoRel:HAS_VALUE {slot:'uApagado'}]->(slUApagado)
+        ON CREATE SET uApagadoRel.value = round(mu_apagado, 4), uApagadoRel.ts = now, uApagadoRel.source='proc_actualizarEstadosActuadores'
+        ON MATCH  SET uApagadoRel.value = round(mu_apagado, 4), uApagadoRel.ts = now, uApagadoRel.source='proc_actualizarEstadosActuadores'
+    }
 
-    // Actualizar o crear la relación HAS_VALUE para el estado del actuador
-    MATCH (slActivo:Slot {name:'activo'})
-    MERGE (actuador)-[activoRel:HAS_VALUE {slot:'activo'}]->(slActivo)
-      ON CREATE SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
-      ON MATCH SET activoRel.value = nuevoEstado, activoRel.ts = now, activoRel.source='proc_actualizarEstadosActuadores'
+    // Actualizamos estado ventilador
+    CALL {
+      WITH corrida, tendencia, now
+      MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventiladors'})
+
+        // Obtener la capacidad del ventilador
+      MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
+
+      // Obtenemos los slots del ventilador
+      MATCH (ventilador)-[rTipoFuncionPrendido:HAS_VALUE {slot:'tipoFuncionPrendido'}]->(:Slot)
+      MATCH (ventilador)-[rPrendidoMedia:HAS_VALUE {slot:'prendidoMedia'}]->(:Slot)
+      MATCH (ventilador)-[rPrendidoSigma:HAS_VALUE {slot:'prendidoSigma'}]->(:Slot)
+      MATCH (ventilador)-[rTipoFuncionApagado:HAS_VALUE {slot:'tipoFuncionApagado'}]->(s:Slot)
+      MATCH (ventilador)-[rApagadoB:HAS_VALUE {slot:'apagadoB'}]->(:Slot)
+      MATCH (ventilador)-[rApagadoC:HAS_VALUE {slot:'apagadoC'}]->(:Slot)
+
+      WITH corrida, tendencia, now, ventilador, toFloat(capRelVent.value) AS capVent,
+          rTipoFuncionPrendido.value AS funcionPrendidoVent,
+          toFloat(rPrendidoMedia.value) AS prendidoMediaVent,
+          toFloat(rPrendidoSigma.value) AS prendidoSigmaVent,
+          rTipoFuncionApagado.value AS funcionApagadoVent,
+          toFloat(rApagadoB.value) AS apagadoBVent,
+          toFloat(rApagadoC.value) AS apagadoCVent
+
+      // Determinar el nuevo estado basado en la tendencia
+      WITH corrida, tendencia, now, ventilador, capVent,
+            1 / (1 + exp(-(apagadoCVent) * (tendencia - apagadoBVent))) AS mu_apagado,
+            exp(-((tendencia - prendidoMediaVent)^2) / (2 * (prendidoSigmaVent^2))) AS mu_prendido
+
+      // Actualizar los valores de pertenencia en el ventilador
+      MATCH (slUPrendido:Slot {name:'uPrendido'})
+      MATCH (slUApagado:Slot {name:'uApagado'})
+      MERGE (ventilador)-[uPrendidoRel:HAS_VALUE {slot:'uPrendido'}]->(slUPrendido)
+        ON CREATE SET uPrendidoRel.value = round(mu_prendido, 4), uPrendidoRel.ts = now, uPrendidoRel.source='proc_actualizarEstadosActuadores'
+        ON MATCH  SET uPrendidoRel.value = round(mu_prendido, 4), uPrendidoRel.ts = now, uPrendidoRel.source='proc_actualizarEstadosActuadores'
+      MERGE (ventilador)-[uApagadoRel:HAS_VALUE {slot:'uApagado'}]->(slUApagado)
+        ON CREATE SET uApagadoRel.value = round(mu_apagado, 4), uApagadoRel.ts = now, uApagadoRel.source='proc_actualizarEstadosActuadores'
+        ON MATCH  SET uApagadoRel.value = round(mu_apagado, 4), uApagadoRel.ts = now, uApagadoRel.source='proc_actualizarEstadosActuadores'
+    }
+
   ",
   'neo4j',
   'write',
