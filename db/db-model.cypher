@@ -420,6 +420,15 @@ MERGE (slValorEsperado:Slot {name:'valorEsperado'})
 MERGE (slTolerancia:Slot {name:'tolerancia'})
 MERGE (slMinimo:Slot {name:'minimo'})
 MERGE (slMaximo:Slot {name:'maximo'})
+MERGE (slTipoFuncionAlta:Slot {name:'tipoFuncionAlta'})
+MERGE (slAltaB:Slot {name:'altaB'})
+MERGE (slAltaC:Slot {name:'altaC'})
+MERGE (slTipoFuncionBaja:Slot {name:'tipoFuncionBaja'})
+MERGE (slBajaB:Slot {name:'bajaB'})
+MERGE (slBajaC:Slot {name:'bajaC'})
+MERGE (slTipoFuncionEnRango:Slot {name:'tipoFuncionEnRango'})
+MERGE (slEnRangoMedia:Slot {name:'enRangoMedia'})
+MERGE (slEnRangoSigma:Slot {name:'enRangoSigma'})
 
 // Etapa
 MERGE (slPrecedeA:Slot {name:'precedeA'})
@@ -427,14 +436,25 @@ MERGE (slConfigTemp:Slot {name:'configuracionTemperatura'})
 
 // Actuador
 MERGE (slCapacidad:Slot {name:'capacidad'})
-MERGE (slActuadorActivo:Slot {name:'activo'})
+// MERGE (slActuadorActivo:Slot {name:'activo'})
+MERGE (slTipoFuncionPrendido:Slot {name:'tipoFuncionPrendido'})
+MERGE (slPrendidoMedia:Slot {name:'prendidoMedia'})
+MERGE (slPrendidoSigma:Slot {name:'prendidoSigma'})
+MERGE (slUPrendido:Slot {name:'uPrendido'})
+MERGE (slTipoFuncionApagado:Slot {name:'tipoFuncionApagado'})
+MERGE (slApagadoB:Slot {name:'apagadoB'})
+MERGE (slApagadoC:Slot {name:'apagadoC'})
+MERGE (slUApagado:Slot {name:'uApagado'})
 
 // Lectura
 MERGE (slTempInt:Slot {name:'temperaturaInterna'})
 MERGE (slTendencia:Slot {name:'tendencia'})
 MERGE (slCorrida:Slot {name:'corrida'})
 MERGE (slEtapa:Slot {name:'etapa'})
-MERGE (slEstado:Slot {name:'estado'})
+// MERGE (slEstado:Slot {name:'estado'})
+MERGE (slUAlta:Slot {name:'uAlta'})
+MERGE (slUBaja:Slot {name:'uBaja'})
+MERGE (slUEnRango:Slot {name:'uEnRango'})
 
 // Corrida
 // MERGE (slId:Slot {name:'id'})
@@ -453,6 +473,8 @@ MERGE (slActivo:Slot {name:'activo'})
 // Recomendacion
 MERGE (slPrioridad:Slot {name:'prioridad'})
 MERGE (slConflictaCon:Slot {name:'conflictaCon'})
+MERGE (slUmbral:Slot {name:'umbral'})
+
 
 // ===================== Declaración de Slots por Clase =====================
 // Rango
@@ -461,6 +483,15 @@ MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(s
 MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slTolerancia)
 MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:false}]->(slMinimo)
 MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:false}]->(slMaximo)
+MERGE (Rango)-[:HAS_SLOT {type:'string',   cardinality:'1',   required:true}]->(slTipoFuncionAlta)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slAltaB)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slAltaC)
+MERGE (Rango)-[:HAS_SLOT {type:'string',   cardinality:'1',   required:true}]->(slTipoFuncionBaja)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slBajaB)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slBajaC)
+MERGE (Rango)-[:HAS_SLOT {type:'string',   cardinality:'1',   required:true}]->(slTipoFuncionEnRango)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slEnRangoMedia)
+MERGE (Rango)-[:HAS_SLOT {type:'float',   cardinality:'1',   required:true}]->(slEnRangoSigma)
 
 // Etapa
 MERGE (Etapa)-[:HAS_SLOT {type:'string',  cardinality:'1',   required:true}]->(slName)
@@ -470,7 +501,15 @@ MERGE (Etapa)-[:HAS_SLOT {type:'Rango',   cardinality:'1',   required:true}]->(s
 // Actuador
 MERGE (Actuador)-[:HAS_SLOT {type:'string',  cardinality:'1', required:true}]->(slName)
 MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slCapacidad)
-MERGE (Actuador)-[:HAS_SLOT {type:'boolean', cardinality:'1', required:true}]->(slActuadorActivo)
+// MERGE (Actuador)-[:HAS_SLOT {type:'boolean', cardinality:'1', required:true}]->(slActuadorActivo)
+MERGE (Actuador)-[:HAS_SLOT {type:'string',  cardinality:'1', required:true}]->(slTipoFuncionPrendido)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slPrendidoMedia)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slPrendidoSigma)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:false}]->(slUPrendido)
+MERGE (Actuador)-[:HAS_SLOT {type:'string',  cardinality:'1', required:true}]->(slTipoFuncionApagado)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slApagadoB)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:true}]->(slApagadoC)
+MERGE (Actuador)-[:HAS_SLOT {type:'float',   cardinality:'1', required:false}]->(slUApagado)
 
 // Lectura
 MERGE (Lectura)-[:HAS_SLOT {type:'string',     cardinality:'1',   required:true}]->(slName)
@@ -479,7 +518,10 @@ MERGE (Lectura)-[:HAS_SLOT {type:'float',      cardinality:'1',   required:true,
 MERGE (Lectura)-[:HAS_SLOT {type:'float',      cardinality:'1',   required:true}]->(slTendencia)
 MERGE (Lectura)-[:HAS_SLOT {type:'Corrida',    cardinality:'1',   required:true}]->(slCorrida)
 MERGE (Lectura)-[:HAS_SLOT {type:'Etapa',      cardinality:'1',   required:true}]->(slEtapa)
-MERGE (Lectura)-[:HAS_SLOT {type:'enum',       cardinality:'1',   required:true, enum:['TemperaturaBaja','TemperaturaAlta','TemperaturaEnRango']}]->(slEstado)
+// MERGE (Lectura)-[:HAS_SLOT {type:'enum',       cardinality:'1',   required:true, enum:['TemperaturaBaja','TemperaturaAlta','TemperaturaEnRango']}]->(slEstado)
+MERGE (Lectura)-[:HAS_SLOT {type:'float',     cardinality:'1',   required:false}]->(slUAlta)
+MERGE (Lectura)-[:HAS_SLOT {type:'float',     cardinality:'1',   required:false}]->(slUBaja)
+MERGE (Lectura)-[:HAS_SLOT {type:'float',     cardinality:'1',   required:false}]->(slUEnRango)
 
 // Corrida
 MERGE (Corrida)-[:HAS_SLOT {type:'string',       cardinality:'1',   required:true}]->(slName)
@@ -504,6 +546,9 @@ MERGE (Recomendacion)-[:HAS_SLOT {type:'string',   cardinality:'1', required:tru
 // MERGE (Recomendacion)-[:HAS_SLOT {type:'boolean',  cardinality:'1', required:true}]->(slActiva)
 MERGE (Recomendacion)-[:HAS_SLOT {type:'integer',  cardinality:'1', required:true}]->(slPrioridad)
 MERGE (Recomendacion)-[:HAS_SLOT {type:'list[Recomendacion]', cardinality:'0..N', required:false}]->(slConflictaCon)
+MERGE (Recomendacion)-[:HAS_SLOT {type:'float',    cardinality:'1', required:true, range:'0.0..1.0'}]->(slUmbral)
+
+
 
 // ===================== Clases derivadas simples (tipos específicos) =====================
 // PuertaAbierta e Incendio (frames typeof Alerta). Se modelan como clases específicas.
@@ -513,9 +558,9 @@ MERGE (PuertaAbierta)-[:SUBCLASS_OF]->(Alerta)
 MERGE (Incendio)-[:SUBCLASS_OF]->(Alerta)
 
 // ===================== Defaults =====================
-MERGE (Actuador)-[:DEFAULT {slot:'activo', value:false}]->(slActuadorActivo)
+// MERGE (Actuador)-[:DEFAULT {slot:'activo', value:false}]->(slActuadorActivo)
 
-MERGE (Lectura)-[:DEFAULT {slot:'estado', value:'TemperaturaEnRango'}]->(slEstado)
+// MERGE (Lectura)-[:DEFAULT {slot:'estado', value:'TemperaturaEnRango'}]->(slEstado)
 MERGE (Lectura)-[:DEFAULT {slot:'ts', value:'datetime()'}]->(slTs)
 MERGE (Lectura)-[:DEFAULT {slot:'tendencia', value:0.0}]->(slTendencia)
 
@@ -581,9 +626,12 @@ MERGE (slRecomendaciones)-[ModificaRecs:IF_MODIFIED]->(dEvalPrioridadRec)
 
 MERGE (dActMinMax)-[:UPDATES]->(slMaximo)
 MERGE (dActMinMax)-[:UPDATES]->(slMinimo)
-MERGE (dUpdEstadoActuador)-[:UPDATES]->(slActuadorActivo)
+MERGE (dUpdEstadoActuador)-[:UPDATES]->(slUPrendido)
+MERGE (dUpdEstadoActuador)-[:UPDATES]->(slUApagado)
 MERGE (dUpdTemp)-[:UPDATES]->(slUltimaLectura)
-MERGE (dUpdEstadoTemp)-[:UPDATES]->(slEstado)
+MERGE (dUpdEstadoTemp)-[:UPDATES]->(slUAlta)
+MERGE (dUpdEstadoTemp)-[:UPDATES]->(slUBaja)
+MERGE (dUpdEstadoTemp)-[:UPDATES]->(slUEnRango)
 MERGE (dEvalAlertas)-[:UPDATES]->(slAlertas)
 MERGE (dEvalPrioridadRec)-[:UPDATES]->(slRecomendaciones)
 MERGE (dEvalRecomendaciones)-[:UPDATES]->(slRecomendaciones)
@@ -606,6 +654,33 @@ MERGE (temp80)-[minTemp80:HAS_VALUE {slot:'minimo',         value:77.0}]->(slMin
 MERGE (temp80)-[maxTemp80:HAS_VALUE {slot:'maximo',         value:83.0}]->(slMaximo)
   ON CREATE SET maxTemp80.source='seed', maxTemp80.ts=datetime()
   ON MATCH  SET maxTemp80.source='seed', maxTemp80.ts=datetime()
+MERGE (temp80)-[tipoFuncionAltaTemp80:HAS_VALUE {slot:'tipoFuncionAlta', value:'sigmoide'}]->(slTipoFuncionAlta)
+  ON CREATE SET tipoFuncionAltaTemp80.source='seed', tipoFuncionAltaTemp80.ts=datetime()
+  ON MATCH  SET tipoFuncionAltaTemp80.source='seed', tipoFuncionAltaTemp80.ts=datetime()
+MERGE (temp80)-[altaBTemp80:HAS_VALUE {slot:'altaB', value:84.0}]->(slAltaB)
+  ON CREATE SET altaBTemp80.source='seed', altaBTemp80.ts=datetime()
+  ON MATCH  SET altaBTemp80.source='seed', altaBTemp80.ts=datetime()
+MERGE (temp80)-[altaCTemp80:HAS_VALUE {slot:'altaC', value:0.3}]->(slAltaC)
+  ON CREATE SET altaCTemp80.source='seed', altaCTemp80.ts=datetime()
+  ON MATCH  SET altaCTemp80.source='seed', altaCTemp80.ts=datetime()
+MERGE (temp80)-[tipoFuncionBajaTemp80:HAS_VALUE {slot:'tipoFuncionBaja', value:'sigmoide'}]->(slTipoFuncionBaja)
+  ON CREATE SET tipoFuncionBajaTemp80.source='seed', tipoFuncionBajaTemp80.ts=datetime()
+  ON MATCH  SET tipoFuncionBajaTemp80.source='seed', tipoFuncionBajaTemp80.ts=datetime()
+MERGE (temp80)-[bajaBTemp80:HAS_VALUE {slot:'bajaB', value:76.0}]->(slBajaB)
+  ON CREATE SET bajaBTemp80.source='seed', bajaBTemp80.ts=datetime()
+  ON MATCH  SET bajaBTemp80.source='seed', bajaBTemp80.ts=datetime()
+MERGE (temp80)-[bajaCTemp80:HAS_VALUE {slot:'bajaC', value:-0.3}]->(slBajaC)
+  ON CREATE SET bajaCTemp80.source='seed', bajaCTemp80.ts=datetime()
+  ON MATCH  SET bajaCTemp80.source='seed', bajaCTemp80.ts=datetime()
+MERGE (temp80)-[tipoFuncionEnRangoTemp80:HAS_VALUE {slot:'tipoFuncionEnRango', value:'gaussiana'}]->(slTipoFuncionEnRango)
+  ON CREATE SET tipoFuncionEnRangoTemp80.source='seed', tipoFuncionEnRangoTemp80.ts=datetime()
+  ON MATCH  SET tipoFuncionEnRangoTemp80.source='seed', tipoFuncionEnRangoTemp80.ts=datetime()
+MERGE (temp80)-[enRangoMediaTemp80:HAS_VALUE {slot:'enRangoMedia', value:80.0}]->(slEnRangoMedia)
+  ON CREATE SET enRangoMediaTemp80.source='seed', enRangoMediaTemp80.ts=datetime()
+  ON MATCH  SET enRangoMediaTemp80.source='seed', enRangoMediaTemp80.ts=datetime()
+MERGE (temp80)-[enRangoSigmaTemp80:HAS_VALUE {slot:'enRangoSigma', value:2.55}]->(slEnRangoSigma)
+  ON CREATE SET enRangoSigmaTemp80.source='seed', enRangoSigmaTemp80.ts=datetime()
+  ON MATCH  SET enRangoSigmaTemp80.source='seed', enRangoSigmaTemp80.ts=datetime()
 
 MERGE (temp30:FrameInstance:Rango {id:'temp_30'})-[:INSTANCE_OF]->(Rango)
 MERGE (temp30)-[nTemp30:HAS_VALUE {slot:'name',           value:'Rango de temperatura para enfriamiento'}]->(slName)
@@ -623,6 +698,33 @@ MERGE (temp30)-[minTemp30:HAS_VALUE {slot:'minimo',         value:27.0}]->(slMin
 MERGE (temp30)-[maxTemp30:HAS_VALUE {slot:'maximo',         value:33.0}]->(slMaximo)
   ON CREATE SET maxTemp30.source='seed', maxTemp30.ts=datetime()
   ON MATCH  SET maxTemp30.source='seed', maxTemp30.ts=datetime()
+MERGE (temp30)-[tipoFuncionAltaTemp30:HAS_VALUE {slot:'tipoFuncionAlta', value:'sigmoide'}]->(slTipoFuncionAlta)
+  ON CREATE SET tipoFuncionAltaTemp30.source='seed', tipoFuncionAltaTemp30.ts=datetime()
+  ON MATCH  SET tipoFuncionAltaTemp30.source='seed', tipoFuncionAltaTemp30.ts=datetime()
+MERGE (temp30)-[altaBTemp30:HAS_VALUE {slot:'altaB', value:34.0}]->(slAltaB)
+  ON CREATE SET altaBTemp30.source='seed', altaBTemp30.ts=datetime()
+  ON MATCH  SET altaBTemp30.source='seed', altaBTemp30.ts=datetime()
+MERGE (temp30)-[altaCTemp30:HAS_VALUE {slot:'altaC', value:0.3}]->(slAltaC)
+  ON CREATE SET altaCTemp30.source='seed', altaCTemp30.ts=datetime()
+  ON MATCH  SET altaCTemp30.source='seed', altaCTemp30.ts=datetime()
+MERGE (temp30)-[tipoFuncionBajaTemp30:HAS_VALUE {slot:'tipoFuncionBaja', value:'sigmoide'}]->(slTipoFuncionBaja)
+  ON CREATE SET tipoFuncionBajaTemp30.source='seed', tipoFuncionBajaTemp30.ts=datetime()
+  ON MATCH  SET tipoFuncionBajaTemp30.source='seed', tipoFuncionBajaTemp30.ts=datetime()
+MERGE (temp30)-[bajaBTemp30:HAS_VALUE {slot:'bajaB', value:26.0}]->(slBajaB)
+  ON CREATE SET bajaBTemp30.source='seed', bajaBTemp30.ts=datetime()
+  ON MATCH  SET bajaBTemp30.source='seed', bajaBTemp30.ts=datetime()
+MERGE (temp30)-[bajaCTemp30:HAS_VALUE {slot:'bajaC', value:-0.3}]->(slBajaC)
+  ON CREATE SET bajaCTemp30.source='seed', bajaCTemp30.ts=datetime()
+  ON MATCH  SET bajaCTemp30.source='seed', bajaCTemp30.ts=datetime()
+MERGE (temp30)-[tipoFuncionEnRangoTemp30:HAS_VALUE {slot:'tipoFuncionEnRango', value:'gaussiana'}]->(slTipoFuncionEnRango)
+  ON CREATE SET tipoFuncionEnRangoTemp30.source='seed', tipoFuncionEnRangoTemp30.ts=datetime()
+  ON MATCH  SET tipoFuncionEnRangoTemp30.source='seed', tipoFuncionEnRangoTemp30.ts=datetime()
+MERGE (temp30)-[enRangoMediaTemp30:HAS_VALUE {slot:'enRangoMedia', value:30.0}]->(slEnRangoMedia)
+  ON CREATE SET enRangoMediaTemp30.source='seed', enRangoMediaTemp30.ts=datetime()
+  ON MATCH  SET enRangoMediaTemp30.source='seed', enRangoMediaTemp30.ts=datetime()
+MERGE (temp30)-[enRangoSigmaTemp30:HAS_VALUE {slot:'enRangoSigma', value:2.55}]->(slEnRangoSigma)
+  ON CREATE SET enRangoSigmaTemp30.source='seed', enRangoSigmaTemp30.ts=datetime()
+  ON MATCH  SET enRangoSigmaTemp30.source='seed', enRangoSigmaTemp30.ts=datetime()
 
 // Etapas (ProcesoTérmico / Enfriamiento)
 MERGE (enf:FrameInstance:Etapa {id:'enfriamiento'})-[:INSTANCE_OF]->(Etapa)
@@ -667,9 +769,28 @@ MERGE (cal)-[cCal:HAS_VALUE {slot:'capacidad',value:1.0}]->(slCapacidad)
   ON CREATE SET cCal.source='seed', cCal.ts=datetime()
   ON MATCH  SET cCal.source='seed', cCal.ts=datetime()
 
-MERGE (cal)-[aCal:HAS_VALUE {slot:'activo',   value:false}]->(slActuadorActivo)
-  ON CREATE SET aCal.source='seed', aCal.ts=datetime()
-  ON MATCH  SET aCal.source='seed', aCal.ts=datetime()
+MERGE (cal)-[tfpCal:HAS_VALUE {slot:'tipoFuncionPrendido', value:'gaussiana'}]->(slTipoFuncionPrendido)
+  ON CREATE SET tfpCal.source='seed', tfpCal.ts=datetime()
+  ON MATCH  SET tfpCal.source='seed', tfpCal.ts=datetime()
+MERGE (cal)-[pMediaCal:HAS_VALUE {slot:'prendidoMedia', value:1.0}]->(slPrendidoMedia)
+  ON CREATE SET pMediaCal.source='seed', pMediaCal.ts=datetime()
+  ON MATCH  SET pMediaCal.source='seed', pMediaCal.ts=datetime()
+MERGE (cal)-[pSigmaCal:HAS_VALUE {slot:'prendidoSigma', value:0.5}]->(slPrendidoSigma)
+  ON CREATE SET pSigmaCal.source='seed', pSigmaCal.ts=datetime()
+  ON MATCH  SET pSigmaCal.source='seed', pSigmaCal.ts=datetime()
+MERGE (cal)-[tfaCal:HAS_VALUE {slot:'tipoFuncionApagado', value:'sigmoide'}]->(slTipoFuncionApagado)
+  ON CREATE SET tfaCal.source='seed', tfaCal.ts=datetime()
+  ON MATCH  SET tfaCal.source='seed', tfaCal.ts=datetime()
+MERGE (cal)-[aBCal:HAS_VALUE {slot:'apagadoB', value:0.4}]->(slApagadoB)
+  ON CREATE SET aBCal.source='seed', aBCal.ts=datetime()
+  ON MATCH  SET aBCal.source='seed', aBCal.ts=datetime()
+MERGE (cal)-[aCCal:HAS_VALUE {slot:'apagadoC', value:-10}]->(slApagadoC)
+  ON CREATE SET aCCal.source='seed', aCCal.ts=datetime()
+  ON MATCH  SET aCCal.source='seed', aCCal.ts=datetime()
+
+// MERGE (cal)-[aCal:HAS_VALUE {slot:'activo',   value:false}]->(slActuadorActivo)
+//   ON CREATE SET aCal.source='seed', aCal.ts=datetime()
+//   ON MATCH  SET aCal.source='seed', aCal.ts=datetime()
 
 MERGE (ven:FrameInstance:Actuador {id:'ventilador'})-[:INSTANCE_OF]->(Actuador)
 MERGE (ven)-[nVen:HAS_VALUE {slot:'name',     value:'Ventilador'}]->(slName)
@@ -680,9 +801,28 @@ MERGE (ven)-[cVen:HAS_VALUE {slot:'capacidad',value:-0.5}]->(slCapacidad)
   ON CREATE SET cVen.source='seed', cVen.ts=datetime()
   ON MATCH  SET cVen.source='seed', cVen.ts=datetime()
 
-MERGE (ven)-[aVen:HAS_VALUE {slot:'activo',   value:false}]->(slActuadorActivo)
-  ON CREATE SET aVen.source='seed', aVen.ts=datetime()
-  ON MATCH  SET aVen.source='seed', aVen.ts=datetime()
+MERGE (ven)-[tfpVen:HAS_VALUE {slot:'tipoFuncionPrendido', value:'gaussiana'}]->(slTipoFuncionPrendido)
+  ON CREATE SET tfpVen.source='seed', tfpVen.ts=datetime()
+  ON MATCH  SET tfpVen.source='seed', tfpVen.ts=datetime()
+MERGE (ven)-[pMediaVen:HAS_VALUE {slot:'prendidoMedia', value:-0.06}]->(slPrendidoMedia)
+  ON CREATE SET pMediaVen.source='seed', pMediaVen.ts=datetime()
+  ON MATCH  SET pMediaVen.source='seed', pMediaVen.ts=datetime()
+MERGE (ven)-[pSigmaVen:HAS_VALUE {slot:'prendidoSigma', value:0.6}]->(slPrendidoSigma)
+  ON CREATE SET pSigmaVen.source='seed', pSigmaVen.ts=datetime()
+  ON MATCH  SET pSigmaVen.source='seed', pSigmaVen.ts=datetime()
+MERGE (ven)-[tfaVen:HAS_VALUE {slot:'tipoFuncionApagado', value:'sigmoide'}]->(slTipoFuncionApagado)
+  ON CREATE SET tfaVen.source='seed', tfaVen.ts=datetime()
+  ON MATCH  SET tfaVen.source='seed', tfaVen.ts=datetime()
+MERGE (ven)-[aBVen:HAS_VALUE {slot:'apagadoB', value:-0.04}]->(slApagadoB)
+  ON CREATE SET aBVen.source='seed', aBVen.ts=datetime()
+  ON MATCH  SET aBVen.source='seed', aBVen.ts=datetime()
+MERGE (ven)-[aCVen:HAS_VALUE {slot:'apagadoC', value:10}]->(slApagadoC)
+  ON CREATE SET aCVen.source='seed', aCVen.ts=datetime()
+  ON MATCH  SET aCVen.source='seed', aCVen.ts=datetime()
+
+// MERGE (ven)-[aVen:HAS_VALUE {slot:'activo',   value:false}]->(slActuadorActivo)
+//   ON CREATE SET aVen.source='seed', aVen.ts=datetime()
+//   ON MATCH  SET aVen.source='seed', aVen.ts=datetime()
 
 // Recomendaciones (instancias) + conflictos
 MERGE (recEV:FrameInstance:Recomendacion {id:'encender_ventilador'})-[:INSTANCE_OF]->(Recomendacion)
@@ -692,6 +832,9 @@ MERGE (recEV)-[nRecEV:HAS_VALUE {slot:'name',      value:'EncenderVentilador'}]-
 MERGE (recEV)-[pRecEV:HAS_VALUE {slot:'prioridad', value:9}]->(slPrioridad)
   ON CREATE SET pRecEV.source='seed', pRecEV.ts=datetime()
   ON MATCH  SET pRecEV.source='seed', pRecEV.ts=datetime()
+MERGE (recEV)-[uRecEV:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
+  ON CREATE SET uRecEV.source='seed', uRecEV.ts=datetime()
+  ON MATCH  SET uRecEV.source='seed', uRecEV.ts=datetime();
 
 MERGE (recAV:FrameInstance:Recomendacion {id:'apagar_ventilador'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recAV)-[nRecAV:HAS_VALUE {slot:'name',      value:'ApagarVentilador'}]->(slName)
@@ -700,6 +843,9 @@ MERGE (recAV)-[nRecAV:HAS_VALUE {slot:'name',      value:'ApagarVentilador'}]->(
 MERGE (recAV)-[pRecAV:HAS_VALUE {slot:'prioridad', value:8}]->(slPrioridad)
   ON CREATE SET pRecAV.source='seed', pRecAV.ts=datetime()
   ON MATCH  SET pRecAV.source='seed', pRecAV.ts=datetime()
+MERGE (recAV)-[uRecAV:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
+  ON CREATE SET uRecAV.source='seed', uRecAV.ts=datetime()
+  ON MATCH  SET uRecAV.source='seed', uRecAV.ts=datetime();
 
 
 MERGE (recEC:FrameInstance:Recomendacion {id:'encender_calefactor'})-[:INSTANCE_OF]->(Recomendacion)
@@ -709,6 +855,9 @@ MERGE (recEC)-[nRecEC:HAS_VALUE {slot:'name',      value:'EncenderCalefactor'}]-
 MERGE (recEC)-[pRecEC:HAS_VALUE {slot:'prioridad', value:9}]->(slPrioridad)
   ON CREATE SET pRecEC.source='seed', pRecEC.ts=datetime()
   ON MATCH  SET pRecEC.source='seed', pRecEC.ts=datetime()
+MERGE (recEC)-[uRecEC:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
+  ON CREATE SET uRecEC.source='seed', uRecEC.ts=datetime()
+  ON MATCH  SET uRecEC.source='seed', uRecEC.ts=datetime();
 
 MERGE (recAC:FrameInstance:Recomendacion {id:'apagar_calefactor'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recAC)-[nRecAC:HAS_VALUE {slot:'name',      value:'ApagarCalefactor'}]->(slName)
@@ -717,6 +866,9 @@ MERGE (recAC)-[nRecAC:HAS_VALUE {slot:'name',      value:'ApagarCalefactor'}]->(
 MERGE (recAC)-[pRecAC:HAS_VALUE {slot:'prioridad', value:10}]->(slPrioridad)
   ON CREATE SET pRecAC.source='seed', pRecAC.ts=datetime()
   ON MATCH  SET pRecAC.source='seed', pRecAC.ts=datetime()
+MERGE (recAC)-[uRecAC:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
+  ON CREATE SET uRecAC.source='seed', uRecAC.ts=datetime()
+  ON MATCH  SET uRecAC.source='seed', uRecAC.ts=datetime();
 
 MERGE (recM:FrameInstance:Recomendacion {id:'mantener_estado_actual'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recM)-[nRecM:HAS_VALUE {slot:'name',      value:'MantenerEstadoActual'}]->(slName)
@@ -725,6 +877,9 @@ MERGE (recM)-[nRecM:HAS_VALUE {slot:'name',      value:'MantenerEstadoActual'}]-
 MERGE (recM)-[pRecM:HAS_VALUE {slot:'prioridad', value:1}]->(slPrioridad)
   ON CREATE SET pRecM.source='seed', pRecM.ts=datetime()
   ON MATCH  SET pRecM.source='seed', pRecM.ts=datetime()
+MERGE (recM)-[uRecM:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
+  ON CREATE SET uRecM.source='seed', uRecM.ts=datetime()
+  ON MATCH  SET uRecM.source='seed', uRecM.ts=datetime();
 
 // Conflictos entre recomendaciones
 MERGE (recEV)-[:CONFLICTA_CON]->(recAV)
@@ -747,6 +902,9 @@ MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 // ===================== Triggers =====================
 CALL apoc.util.sleep(4000); // Esperar a que se creen los índices y constraints
+
+CALL db.clearQueryCaches(); // Borrar caches de consultas
+
 // Borrar triggers existentes (si los hay)
 CALL apoc.trigger.removeAll();
 
