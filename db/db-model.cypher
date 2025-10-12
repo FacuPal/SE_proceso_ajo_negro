@@ -1,6 +1,8 @@
 // =================== 'system' DB ===================
 :use system;
 
+// TODO: agregar fuzzy logic en los triggers y procedimientos
+
 // ==================== Procedures =====================
 // Borrar procedimientos almacenados existentes (si los hay)
 CALL apoc.custom.dropAll('neo4j');
@@ -27,27 +29,48 @@ CALL apoc.custom.installProcedure(
     MATCH (rango:Rango {id:rangoId})
     WHERE rango:Rango
 
-    // Obtener los valores de minimo y maximo del rango
-    MATCH (rango)-[minRel:HAS_VALUE {slot:'minimo'}]->(:Slot)
-    MATCH (rango)-[maxRel:HAS_VALUE {slot:'maximo'}]->(:Slot)
-    WITH lectura, tempInt,
-          toFloat(minRel.value) AS minTemp,
-          toFloat(maxRel.value) AS maxTemp,
+    MATCH (rango)-[rTipoFuncionBaja:HAS_VALUE {slot:'tipoFuncionBaja'}]->(:Slot)
+    MATCH (rango)-[rBajaB:HAS_VALUE {slot:'bajaB'}]->(:Slot)
+    MATCH (rango)-[rBajaC:HAS_VALUE {slot:'bajaC'}]->(:Slot)
+    MATCH (rango)-[rTipoFuncionEnRango:HAS_VALUE {slot:'tipoFuncionEnRango'}]->(:Slot)
+    MATCH (rango)-[rEnRangoMedia:HAS_VALUE {slot:'enRangoMedia'}]->(:Slot)
+    MATCH (rango)-[rEnRangoSigma:HAS_VALUE {slot:'enRangoSigma'}]->(:Slot)
+    MATCH (rango)-[rTipoFuncionAlta:HAS_VALUE {slot:'tipoFuncionAlta'}]->(:Slot)
+    MATCH (rango)-[rAltaB:HAS_VALUE {slot:'altaB'}]->(:Slot)
+    MATCH (rango)-[rAltaC:HAS_VALUE {slot:'altaC'}]->(:Slot)
+    WITH lectura, tempInt, rango,
+          rTipoFuncionBaja.value AS funcionBaja,
+          toFloat(rBajaB.value) AS bajaB,
+          toFloat(rBajaC.value) AS bajaC,
+          rTipoFuncionEnRango.value AS funcionEnRango,
+          toFloat(rEnRangoMedia.value) AS enRangoMedia,
+          toFloat(rEnRangoSigma.value) AS enRangoSigma,
+          rTipoFuncionAlta.value AS funcionAlta,
+          toFloat(rAltaB.value) AS altaB,
+          toFloat(rAltaC.value) AS altaC,
           datetime() AS now
 
-    // Determinar el nuevo estado basado en la temperatura interna y el rango
-    WITH lectura, tempInt, minTemp, maxTemp, now,
-          CASE 
-            WHEN tempInt <= minTemp THEN 'TemperaturaBaja'
-            WHEN tempInt >= maxTemp THEN 'TemperaturaAlta'
-            ELSE 'TemperaturaEnRango'
-          END AS nuevoEstado
 
-    // Actualizar o crear la relación HAS_VALUE para el estado
-    MATCH (slEstado:Slot {name:'estado'})
-    MERGE (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(slEstado)
-      ON CREATE SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'
-      ON MATCH  SET estadoRel.value = nuevoEstado, estadoRel.ts = now, estadoRel.source='proc_actualizarEstadoTemperatura'  
+    // Determinar el nuevo estado basado en la temperatura interna y el rango
+    WITH  lectura, tempInt, now,
+          1 / (1 + exp(-(bajaC) * (tempInt - bajaB))) AS mu_baja,
+          exp(-((tempInt - enRangoMedia)^2) / (2 * (enRangoSigma^2))) AS mu_en_rango,
+          1 / (1 + exp(-altaC * (tempInt - altaB))) AS mu_alta
+
+
+    // Actualizar los valores de pertenencia en la lectura
+    MATCH (slUAlta:Slot {name:'uAlta'})
+    MATCH (slUBaja:Slot {name:'uBaja'})
+    MATCH (slUEnRango:Slot {name:'uEnRango'})
+    MERGE (lectura)-[uAltaRel:HAS_VALUE {slot:'uAlta'}]->(slUAlta)
+      ON CREATE SET uAltaRel.value = round(mu_alta, 4), uAltaRel.ts = now, uAltaRel.source='proc_actualizarEstadoTemperatura'
+      ON MATCH  SET uAltaRel.value = round(mu_alta, 4), uAltaRel.ts = now, uAltaRel.source='proc_actualizarEstadoTemperatura'
+    MERGE (lectura)-[uBajaRel:HAS_VALUE {slot:'uBaja'}]->(slUBaja)
+      ON CREATE SET uBajaRel.value = round(mu_baja, 4), uBajaRel.ts = now, uBajaRel.source='proc_actualizarEstadoTemperatura'
+      ON MATCH  SET uBajaRel.value = round(mu_baja, 4), uBajaRel.ts = now, uBajaRel.source='proc_actualizarEstadoTemperatura'
+    MERGE (lectura)-[uEnRangoRel:HAS_VALUE {slot:'uEnRango'}]->(slUEnRango)
+      ON CREATE SET uEnRangoRel.value = round(mu_en_rango, 4), uEnRangoRel.ts = now, uEnRangoRel.source='proc_actualizarEstadoTemperatura'
+      ON MATCH  SET uEnRangoRel.value = round(mu_en_rango, 4), uEnRangoRel.ts = now, uEnRangoRel.source='proc_actualizarEstadoTemperatura'
   ",
   'neo4j',
   'write',
@@ -595,9 +618,17 @@ MERGE (slTolerancia)-[ModificaTolerancia:IF_MODIFIED]->(dActMinMax)
   ON CREATE SET ModificaTolerancia.ts = datetime(), ModificaTolerancia.source='seed'
   ON MATCH  SET ModificaTolerancia.ts = datetime()
 
-MERGE (slActuadorActivo)-[ModificaActivoActuador:IF_NEEDED]->(dUpdEstadoActuador)
-  ON CREATE SET ModificaActivoActuador.ts = datetime(), ModificaActivoActuador.source='seed'
-  ON MATCH  SET ModificaActivoActuador.ts = datetime()
+// MERGE (slActuadorActivo)-[ModificaActivoActuador:IF_NEEDED]->(dUpdEstadoActuador)
+//   ON CREATE SET ModificaActivoActuador.ts = datetime(), ModificaActivoActuador.source='seed'
+//   ON MATCH  SET ModificaActivoActuador.ts = datetime()
+
+MERGE (slUPrendido)-[ModificaPrendidoActuador:IF_NEEDED]->(dUpdEstadoActuador)
+  ON CREATE SET ModificaPrendidoActuador.ts = datetime(), ModificaPrendidoActuador.source='seed'
+  ON MATCH  SET ModificaPrendidoActuador.ts = datetime()
+
+MERGE (slUApagado)-[ModificaApagadoctuador:IF_NEEDED]->(dUpdEstadoActuador)
+  ON CREATE SET ModificaApagadoctuador.ts = datetime(), ModificaApagadoctuador.source='seed'
+  ON MATCH  SET ModificaApagadoctuador.ts = datetime()
 
 MERGE (slTempInt)-[ModificaTemp:IF_ADDED]->(dUpdTemp)
   ON CREATE SET ModificaTemp.ts = datetime(), ModificaTemp.source='seed'
@@ -834,7 +865,7 @@ MERGE (recEV)-[pRecEV:HAS_VALUE {slot:'prioridad', value:9}]->(slPrioridad)
   ON MATCH  SET pRecEV.source='seed', pRecEV.ts=datetime()
 MERGE (recEV)-[uRecEV:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
   ON CREATE SET uRecEV.source='seed', uRecEV.ts=datetime()
-  ON MATCH  SET uRecEV.source='seed', uRecEV.ts=datetime();
+  ON MATCH  SET uRecEV.source='seed', uRecEV.ts=datetime()
 
 MERGE (recAV:FrameInstance:Recomendacion {id:'apagar_ventilador'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recAV)-[nRecAV:HAS_VALUE {slot:'name',      value:'ApagarVentilador'}]->(slName)
@@ -845,7 +876,7 @@ MERGE (recAV)-[pRecAV:HAS_VALUE {slot:'prioridad', value:8}]->(slPrioridad)
   ON MATCH  SET pRecAV.source='seed', pRecAV.ts=datetime()
 MERGE (recAV)-[uRecAV:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
   ON CREATE SET uRecAV.source='seed', uRecAV.ts=datetime()
-  ON MATCH  SET uRecAV.source='seed', uRecAV.ts=datetime();
+  ON MATCH  SET uRecAV.source='seed', uRecAV.ts=datetime()
 
 
 MERGE (recEC:FrameInstance:Recomendacion {id:'encender_calefactor'})-[:INSTANCE_OF]->(Recomendacion)
@@ -857,7 +888,7 @@ MERGE (recEC)-[pRecEC:HAS_VALUE {slot:'prioridad', value:9}]->(slPrioridad)
   ON MATCH  SET pRecEC.source='seed', pRecEC.ts=datetime()
 MERGE (recEC)-[uRecEC:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
   ON CREATE SET uRecEC.source='seed', uRecEC.ts=datetime()
-  ON MATCH  SET uRecEC.source='seed', uRecEC.ts=datetime();
+  ON MATCH  SET uRecEC.source='seed', uRecEC.ts=datetime()
 
 MERGE (recAC:FrameInstance:Recomendacion {id:'apagar_calefactor'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recAC)-[nRecAC:HAS_VALUE {slot:'name',      value:'ApagarCalefactor'}]->(slName)
@@ -868,7 +899,7 @@ MERGE (recAC)-[pRecAC:HAS_VALUE {slot:'prioridad', value:10}]->(slPrioridad)
   ON MATCH  SET pRecAC.source='seed', pRecAC.ts=datetime()
 MERGE (recAC)-[uRecAC:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
   ON CREATE SET uRecAC.source='seed', uRecAC.ts=datetime()
-  ON MATCH  SET uRecAC.source='seed', uRecAC.ts=datetime();
+  ON MATCH  SET uRecAC.source='seed', uRecAC.ts=datetime()
 
 MERGE (recM:FrameInstance:Recomendacion {id:'mantener_estado_actual'})-[:INSTANCE_OF]->(Recomendacion)
 MERGE (recM)-[nRecM:HAS_VALUE {slot:'name',      value:'MantenerEstadoActual'}]->(slName)
@@ -879,7 +910,7 @@ MERGE (recM)-[pRecM:HAS_VALUE {slot:'prioridad', value:1}]->(slPrioridad)
   ON MATCH  SET pRecM.source='seed', pRecM.ts=datetime()
 MERGE (recM)-[uRecM:HAS_VALUE {slot:'umbral',   value:0.5}]->(slUmbral)
   ON CREATE SET uRecM.source='seed', uRecM.ts=datetime()
-  ON MATCH  SET uRecM.source='seed', uRecM.ts=datetime();
+  ON MATCH  SET uRecM.source='seed', uRecM.ts=datetime()
 
 // Conflictos entre recomendaciones
 MERGE (recEV)-[:CONFLICTA_CON]->(recAV)
