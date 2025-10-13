@@ -353,7 +353,6 @@ CALL apoc.custom.installProcedure(
           sRecomendaciones, sUmbral
     
 
-    ////////// ================== TODO: APLICAR LÓGICA DIFUSA ================== //////////|
     // === REGLA_ENCENDER_VENTILADOR ===
     CALL {
       WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
@@ -367,7 +366,6 @@ CALL apoc.custom.installProcedure(
       WHERE calificacion_encender_ventilador >= toFloat(uRel.value)
 
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
-
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
         ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_ventilador
         ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_ventilador
@@ -375,52 +373,78 @@ CALL apoc.custom.installProcedure(
 
     // === REGLA_APAGAR_VENTILADOR ===
     CALL {
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones
-      WHERE ventiladorActivo AND estadoTemp <> 'TemperaturaAlta'
-      MATCH (reco:Recomendacion {id: 'apagar_ventilador'})
+      WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
+      MATCH (reco:Recomendacion {id: 'apagar_ventilador'}) 
+      MATCH (reco)-[uRel:HAS_VALUE {slot:'umbral'}]->(sUmbral)
+    
+      WITH corrida, reco, mu_alta, mu_prendido_vent, now, sRecomendaciones,
+           apoc.coll.min([(1-mu_alta), mu_prendido_vent]) AS calificacion_apagar_ventilador // Usar (1 - mu_alta) para representar la pertenencia a 'no alta'
+      WHERE calificacion_apagar_ventilador >= toFloat(uRel.value)
+
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
-      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
-      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+        ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_apagar_ventilador
+        ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_apagar_ventilador
     }
 
     // === REGLA_ENCENDER_CALECTOR ===
     CALL {
-      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones           
-      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones            
-      WHERE NOT calefactorActivo AND estadoTemp = 'TemperaturaBaja'
+      WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
       MATCH (reco:Recomendacion {id: 'encender_calefactor'}) 
+      MATCH (reco)-[uRel:HAS_VALUE {slot:'umbral'}]->(sUmbral)
+    
+      WITH corrida, reco, mu_baja, mu_apagado_cal, now, sRecomendaciones,
+           apoc.coll.min([mu_baja, mu_apagado_cal]) AS calificacion_encender_calefactor
+      WHERE calificacion_encender_calefactor >= toFloat(uRel.value)
+
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
-      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
-      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+        ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_calefactor
+        ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_calefactor
     }
 
-    // === REGLA_APAGAR_CALECTOR ===
+    // === REGLA_APAGAR_CALEFCTOR ===
     CALL {
-      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones
-      WITH corrida, estadoTemp, now, calefactorActivo, sRecomendaciones
-      WHERE calefactorActivo AND estadoTemp <> 'TemperaturaBaja'
-      MATCH (reco:Recomendacion {id: 'apagar_calefactor'})
+      WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
+      MATCH (reco:Recomendacion {id: 'apagar_calefactor'}) 
+      MATCH (reco)-[uRel:HAS_VALUE {slot:'umbral'}]->(sUmbral)
+    
+      WITH corrida, reco, mu_baja, mu_apagado_cal, now, sRecomendaciones,
+           apoc.coll.min([(1-mu_baja), (1-mu_apagado_cal)]) AS calificacion_apagar_calefactor // Usar (1 - mu_baja) para representar la pertenencia a 'no baja'
+      WHERE calificacion_apagar_calefactor >= toFloat(uRel.value)
+
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
-      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
-      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime() 
+        ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_apagar_calefactor
+        ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_apagar_calefactor
     }
 
     // == REGLA_MANTENER_ESTADO_ACTUAL ===
     CALL {
-      WITH corrida, estadoTemp, now, calefactorActivo, ventiladorActivo, sRecomendaciones
-      WITH corrida, estadoTemp, now, calefactorActivo, ventiladorActivo, sRecomendaciones
-      WHERE estadoTemp = 'TemperaturaEnRango' 
-      OR (estadoTemp = 'TemperaturaAlta' AND ventiladorActivo)
-      OR (estadoTemp = 'TemperaturaBaja' AND calefactorActivo)
-      MATCH (reco:Recomendacion {id: 'mantener_estado_actual'})
+      WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
+      MATCH (reco:Recomendacion {id: 'mantener_estado_actual'}) 
+      MATCH (reco)-[uRel:HAS_VALUE {slot:'umbral'}]->(sUmbral)
+    
+      WITH corrida, reco, mu_alta, mu_baja, mu_en_rango, mu_prendido_vent, mu_prendido_cal, now, sRecomendaciones,
+          apoc.coll.max([
+            mu_en_rango, // Alta prioridad si la temperatura está en rango
+            apoc.coll.min([mu_alta, mu_prendido_vent]), // OR (TemperaturaAlta AND VentiladorPrendido)
+            apoc.coll.min([mu_baja, mu_prendido_cal])// OR (TemperaturaBaja AND CalefactorPrendido)
+          ]) AS calificacion_mantener_estado_actual
+      WHERE calificacion_mantener_estado_actual >= toFloat(uRel.value)
+
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
-      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
-      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+        ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_mantener_estado_actual
+        ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_mantener_estado_actual
     }
 
     // Ordenar por prioridad y quitar las recomendaciones conflictivas con menor prioridad
