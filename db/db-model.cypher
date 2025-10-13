@@ -95,6 +95,7 @@ CALL apoc.custom.installProcedure(
     WITH corrida, toFloat(tendRel.value) AS tendencia, datetime() AS now
 
     // Actualizamos estado calefactor
+    // TODO: Probablemente cambiar la función de prendido por una sigmoide?
     CALL {
       WITH corrida, tendencia, now
       MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
@@ -137,7 +138,7 @@ CALL apoc.custom.installProcedure(
     // Actualizamos estado ventilador
     CALL {
       WITH corrida, tendencia, now
-      MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventiladors'})
+      MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
 
         // Obtener la capacidad del ventilador
       MATCH (ventilador)-[capRelVent:HAS_VALUE {slot:'capacidad'}]->(:Slot)
@@ -306,36 +307,70 @@ CALL apoc.custom.installProcedure(
 
     WITH corrida
 
-    // Obtenemos los actuadores asociados a la corrida
-    MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
-    MATCH (calefactor)-[rCalefactorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
-    MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
-    MATCH (ventilador)-[rVentiladorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
-
     // Obtener la última lectura asociada a la corrida
     MATCH (corrida)-[ultRel:ULTIMA_LECTURA]->(lectura:Lectura)
 
+    // Obtener los mu de la lectura
+    MATCH (slUAlta:Slot {name:'uAlta'})
+    MATCH (slUBaja:Slot {name:'uBaja'})
+    MATCH (slUEnRango:Slot {name:'uEnRango'})
+    MATCH (lectura)-[uAltaRel:HAS_VALUE {slot:'uAlta'}]->(slUAlta)
+    MATCH (lectura)-[uBajaRel:HAS_VALUE {slot:'uBaja'}]->(slUBaja)
+    MATCH (lectura)-[uEnRangoRel:HAS_VALUE {slot:'uEnRango'}]->(slUEnRango)
+
+    WITH corrida, toFloat(uAltaRel.value) AS mu_alta,
+          toFloat(uBajaRel.value) AS mu_baja,
+          toFloat(uEnRangoRel.value) AS mu_en_rango,
+          datetime() AS now
+    
+    // Obtenemos los actuadores asociados a la corrida
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(calefactor:Actuador {id:'calefactor'})
+    MATCH (corrida)-[:TIENE_ACTUADOR]->(ventilador:Actuador {id:'ventilador'})
+
+    // Obtenemos los mu de los actuadores
+    MATCH (slUPrendido:Slot {name:'uPrendido'})
+    MATCH (slUApagado:Slot {name:'uApagado'})
+    MATCH (calefactor)-[uPrendidoCal:HAS_VALUE {slot:'uPrendido'}]->(slUPrendido)
+    MATCH (calefactor)-[uApagadoCal:HAS_VALUE {slot:'uApagado'}]->(slUApagado)
+    MATCH (ventilador)-[uPrendidoVent:HAS_VALUE {slot:'uPrendido'}]->(slUPrendido)
+    MATCH (ventilador)-[uApagadoVent:HAS_VALUE {slot:'uApagado'}]->(slUApagado)
+
+    // MATCH (calefactor)-[rCalefactorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
+    // MATCH (ventilador)-[rVentiladorActivo:HAS_VALUE {slot:'activo'}]->(:Slot)
+
+    WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          toFloat(uPrendidoCal.value) AS mu_prendido_cal,
+          toFloat(uApagadoCal.value) AS mu_apagado_cal,
+          toFloat(uPrendidoVent.value) AS mu_prendido_vent,
+          toFloat(uApagadoVent.value) AS mu_apagado_vent
+
     // Obtenemos slot recomendacion
     MATCH (sRecomendaciones:Slot {name:'recomendaciones'})
+    MATCH (sUmbral:Slot {name:'umbral'})
 
-    // Obtenemos el estado de la temperatura 
-    MATCH (lectura)-[estadoRel:HAS_VALUE {slot:'estado'}]->(:Slot)
-    WITH corrida, calefactor, ventilador, estadoRel.value AS estadoTemp, datetime() AS now, 
-         toBoolean(rCalefactorActivo.value) AS calefactorActivo,
-         toBoolean(rVentiladorActivo.value) AS ventiladorActivo,
-         sRecomendaciones
+    WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
     
+
+    ////////// ================== TODO: APLICAR LÓGICA DIFUSA ================== //////////|
     // === REGLA_ENCENDER_VENTILADOR ===
     CALL {
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones           
-      WITH corrida, estadoTemp, now, ventiladorActivo, sRecomendaciones            
-      WHERE NOT ventiladorActivo AND estadoTemp = 'TemperaturaAlta'
-      
+      WITH corrida, mu_alta, mu_baja, mu_en_rango, now,
+          mu_prendido_cal, mu_apagado_cal, mu_prendido_vent, mu_apagado_vent,
+          sRecomendaciones, sUmbral
       MATCH (reco:Recomendacion {id: 'encender_ventilador'}) 
+      MATCH (reco)-[uRel:HAS_VALUE {slot:'umbral'}]->(sUmbral)
+
+      WITH corrida, reco, mu_alta, mu_apagado_vent, now, sRecomendaciones,
+           apoc.coll.min([mu_alta, mu_apagado_vent]) AS calificacion_encender_ventilador
+      WHERE calificacion_encender_ventilador >= toFloat(uRel.value)
+
       MERGE (corrida)-[:HAS_VALUE {slot:'recomendaciones', value:reco.id, ts:now, source:'proc_actualizarRecomendaciones'}]->(sRecomendaciones)
+
       MERGE (corrida)-[r:RECOMIENDA {slot:'recomendaciones'}]->(reco)
-      ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
-      ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime()
+        ON CREATE SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_ventilador
+        ON MATCH  SET r.source='trigger_relacionarCorridaRecomendacion', r.ts=datetime(), r.calificacion=calificacion_encender_ventilador
     }
 
     // === REGLA_APAGAR_VENTILADOR ===
