@@ -10,6 +10,7 @@ from typing import Dict, Any
 from langchain.agents import create_agent
 from tools.corrida_actual import tool_corrida_actual
 from utils.agent_config import SYSTEM_PROMPT
+from ollama import Client
 
 # Cargar variables de entorno desde .env si existe
 load_dotenv()
@@ -21,19 +22,20 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_HOST", "http://172.17.0.1:11434")
 OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))
 
-# Inicializar el modelo de LangChain
-llm = ChatOllama(
-    model=OLLAMA_MODEL,
-    base_url=OLLAMA_BASE_URL,
-    temperature=OLLAMA_TEMPERATURE,
+client = Client(
+  host=OLLAMA_BASE_URL
 )
 
-agent = create_agent(
-    llm,
-    tools=[
-        tool_corrida_actual
-    ],
-)
+# # Inicializar el modelo de LangChain
+# llm = ChatOllama(
+#     model=OLLAMA_MODEL,
+#     base_url=OLLAMA_BASE_URL,
+#     temperature=OLLAMA_TEMPERATURE,
+# )
+
+available_functions = {
+  tool_corrida_actual.__name__: tool_corrida_actual,
+}
 
 
 def chat_with_llama(message, history):
@@ -49,33 +51,54 @@ def chat_with_llama(message, history):
     """
     try:
         # Construir el historial de mensajes para LangChain
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
-        
+        messages = [{ 
+            "role": "system", 
+            "content": SYSTEM_PROMPT
+        }]
+
         # Agregar historial previo si existe
         for msg in history:
             if isinstance(msg, dict):
-                # Formato nuevo de Gradio con roles
-                if msg.get("role") == "user":
-                    messages.append(HumanMessage(content=msg.get("content", "")))
-                elif msg.get("role") == "assistant":
-                    messages.append(AIMessage(content=msg.get("content", "")))
+               messages.append(msg)
             elif isinstance(msg, (list, tuple)) and len(msg) == 2:
                 # Formato antiguo de Gradio: (user_msg, bot_msg)
-                messages.append(HumanMessage(content=msg[0]))
+                messages.append({"role": "user", "content": msg[0]})
                 if msg[1]:
-                    messages.append(AIMessage(content=msg[1]))
+                    messages.append({"role": "assistant", "content": msg[1]})
         
         # Agregar mensaje actual del usuario
-        messages.append(HumanMessage(content=message))
-        
+        messages.append({"role": "user", "content": message})
+
+        while True:
+            response = client.chat(
+                model=OLLAMA_MODEL,
+                messages=messages,
+                tools=[tool_corrida_actual],
+                think=True,
+            )
+            messages.append(response.message)
+            print("Thinking: ", response.message.thinking)
+            print("Content: ", response.message.content)
+            if response.message.tool_calls:
+                for tc in response.message.tool_calls:
+                    if tc.function.name in available_functions:
+                        print(f"Calling {tc.function.name} with arguments {tc.function.arguments}")
+                        result = available_functions[tc.function.name](**tc.function.arguments)
+                        print(f"Result: {result}")
+                        # add the tool result to the messages
+                        messages.append({'role': 'tool', 'tool_name': tc.function.name, 'content': str(result)})
+            else:
+                # end the loop when there are no more tool calls
+                break
+
         # Invocar el modelo con LangChain
         # response = llm.invoke(messages)
-        # llm_with_tools = agent.bind_tools(tools)
-        response = agent.invoke({
-            "messages": messages
-        })
+        # # llm_with_tools = agent.bind_tools(tools)
+        # response = agent.invoke({
+        #     "messages": messages
+        # })
 
-        return response["messages"][-1].content
+        return response.message.content
 
     except Exception as e:
         return f"❌ Error al invocar el modelo: {str(e)}"

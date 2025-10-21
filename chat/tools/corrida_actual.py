@@ -1,5 +1,5 @@
 from utils.run_cypher import run_cypher
-from langchain_core.tools import tool
+# from langchain_core.tools import tool
 
 # ============================================================================
 # TOOL 3: Completar Datos del Candidato
@@ -13,13 +13,14 @@ SET c.herramientasConocimientos = coalesce(c.herramientasConocimientos, []) + CA
 $tool IN c.herramientasConocimientos THEN [] ELSE [$tool] END
 RETURN c.nombre AS candidato, c.herramientasConocimientos AS herramientas
 """
-@tool(
-    "tool_corrida_actual",
-    description="Tool que permite obtener información sobre la corrida actual. Si existe, devuelve los detalles de la corrida.",
-)
-def tool_corrida_actual():
+# @tool(
+#     "tool_corrida_actual",
+#     description="Tool que permite obtener información sobre la corrida actual. Si existe, devuelve los detalles de la corrida.",
+# )
+def tool_corrida_actual()-> str:
     """
     Obtiene información sobre la corrida actual.
     """
     # return run_cypher(CY_ADD_TOOL, {"cand": candidato, "tool": herramienta})[0]
-    return print(f"ejecutando la consulta {CY_ADD_TOOL}")
+    print(f"ejecutando la consulta {CY_ADD_TOOL}")
+    return "id 001, fecha inicio: 2024-06-01, etapa actual: fermentación, temperatura: 60°C, humedad: 80%"
