@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from typing import Dict, Any
-from langchain.agents import create_agent
+# from langchain.agents import create_agent
 from tools.corrida_actual import tool_corrida_actual
 from utils.agent_config import SYSTEM_PROMPT
 
@@ -26,15 +26,7 @@ llm = ChatOllama(
     model=OLLAMA_MODEL,
     base_url=OLLAMA_BASE_URL,
     temperature=OLLAMA_TEMPERATURE,
-)
-
-agent = create_agent(
-    llm,
-    tools=[
-        tool_corrida_actual
-    ],
-)
-
+).bind_tools([tool_corrida_actual])
 
 def chat_with_llama(message, history):
     """
@@ -48,34 +40,31 @@ def chat_with_llama(message, history):
         La respuesta generada por el modelo
     """
     try:
-        # Construir el historial de mensajes para LangChain
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
+        # # Construir el historial de mensajes para LangChain
+        messages = [SystemMessage(content="Ajo negro")]
         
-        # Agregar historial previo si existe
-        for msg in history:
-            if isinstance(msg, dict):
-                # Formato nuevo de Gradio con roles
-                if msg.get("role") == "user":
-                    messages.append(HumanMessage(content=msg.get("content", "")))
-                elif msg.get("role") == "assistant":
-                    messages.append(AIMessage(content=msg.get("content", "")))
-            elif isinstance(msg, (list, tuple)) and len(msg) == 2:
-                # Formato antiguo de Gradio: (user_msg, bot_msg)
-                messages.append(HumanMessage(content=msg[0]))
-                if msg[1]:
-                    messages.append(AIMessage(content=msg[1]))
-        
+        # # Agregar historial previo si existe
+        # for msg in history:
+        #     if isinstance(msg, dict):
+        #         # Formato nuevo de Gradio con roles
+        #         if msg.get("role") == "user":
+        #             messages.append(HumanMessage(content=msg.get("content", "")))
+        #         elif msg.get("role") == "assistant":
+        #             messages.append(AIMessage(content=msg.get("content", "")))
+        #     elif isinstance(msg, (list, tuple)) and len(msg) == 2:
+        #         # Formato antiguo de Gradio: (user_msg, bot_msg)
+        #         messages.append(HumanMessage(content=msg[0]))
+        #         if msg[1]:
+        #             messages.append(AIMessage(content=msg[1]))
+
         # Agregar mensaje actual del usuario
         messages.append(HumanMessage(content=message))
         
         # Invocar el modelo con LangChain
-        # response = llm.invoke(messages)
-        # llm_with_tools = agent.bind_tools(tools)
-        response = agent.invoke({
-            "messages": messages
-        })
+        response = llm.invoke(messages)
 
-        return response["messages"][-1].content
+
+        return response.content
 
     except Exception as e:
         return f"❌ Error al invocar el modelo: {str(e)}"

@@ -15,11 +15,15 @@ RETURN c.nombre AS candidato, c.herramientasConocimientos AS herramientas
 """
 @tool(
     "tool_corrida_actual",
-    description="Tool que permite obtener información sobre la corrida actual. Si existe, devuelve los detalles de la corrida.",
+    description="""
+        Tool que permite obtener información sobre la corrida actual. Si existe, devuelve los detalles de la corrida. 
+        Sinónimos de corrida son tanda, ejecución, proceso, batch.
+    """,
 )
 def tool_corrida_actual():
     """
     Obtiene información sobre la corrida actual.
     """
     # return run_cypher(CY_ADD_TOOL, {"cand": candidato, "tool": herramienta})[0]
-    return print(f"ejecutando la consulta {CY_ADD_TOOL}")
+    print("Ejecuctando tool_corrida_actual")
+    return "id 001 - fecha inicio 2024-10-01 - etapa actual fermentación"
