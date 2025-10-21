@@ -1,0 +1,8 @@
+
+gradio==5.49.1
+gradio_client==1.13.3
+langchain==1.0.1
+langchain-community==0.4
+langchain-core==1.0.0
+python-dotenv==1.0.0
+neo4j
