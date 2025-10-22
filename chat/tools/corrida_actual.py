@@ -1,17 +1,20 @@
 from utils.run_cypher import run_cypher
 from langchain_core.tools import tool
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 # ============================================================================
-# TOOL 3: Completar Datos del Candidato
+# TOOL Corrida Actual: Obtener la corrida actual
 # ============================================================================
-# Permite agregar una nueva herramienta/conocimiento al perfil de un candidato
-# La consulta usa COALESCE para manejar casos donde la lista no existe aún
+# Permite obtener de la base de datos la corrida que no tiene fecha de fin asignada.
+# Si existe, devuelve los detalles de la corrida.
 CY_ADD_TOOL = """
-MATCH (c:Candidato {nombre:$cand})
-WITH c
-SET c.herramientasConocimientos = coalesce(c.herramientasConocimientos, []) + CASE WHEN
-$tool IN c.herramientasConocimientos THEN [] ELSE [$tool] END
-RETURN c.nombre AS candidato, c.herramientasConocimientos AS herramientas
+MATCH (c:Corrida)
+OPTIONAL MATCH (c)-[rFechaFin:HAS_VALUE {slot: 'fechaFin'}]->(:Slot)
+MATCH (c)-[:ETAPA_ACTUAL]->(:Etapa)-[rEtapa:HAS_VALUE {slot: 'name'}]->(:Slot)
+WHERE rFechaFin IS NULL
+RETURN c.id as id, rEtapa.value as etapa
 """
 @tool(
     "tool_corrida_actual",
@@ -21,6 +24,5 @@ def tool_corrida_actual():
     """
     Obtiene información sobre la corrida actual.
     """
-    # return run_cypher(CY_ADD_TOOL, {"cand": candidato, "tool": herramienta})[0]
-    print(f"ejecutando la consulta {CY_ADD_TOOL}")
-    return "id 001, fecha inicio: 2024-06-01, etapa actual: fermentación, temperatura: 60°C, humedad: 80%"
+    logger.info("Ejecutando tool_corrida_actual")
+    return run_cypher(CY_ADD_TOOL)

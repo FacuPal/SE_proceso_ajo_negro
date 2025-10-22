@@ -7,6 +7,7 @@ docker run -d --gpus=all -v ollama:/root/.ollama -p 11434:11434 --name ollama ol
 
 # 3. Verificar que el modelo está descargado
 docker exec -it ollama ollama run llama3.2:latest
+docker exec -it ollama ollama run qwen3:4b
 
 # 4. Ejecutar la aplicación
 .venv/bin/python main.py
