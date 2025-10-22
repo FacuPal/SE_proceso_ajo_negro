@@ -22,4 +22,5 @@ def tool_corrida_actual():
     Obtiene información sobre la corrida actual.
     """
     # return run_cypher(CY_ADD_TOOL, {"cand": candidato, "tool": herramienta})[0]
-    return print(f"ejecutando la consulta {CY_ADD_TOOL}")
+    print(f"ejecutando la consulta {CY_ADD_TOOL}")
+    return "id 001, fecha inicio: 2024-06-01, etapa actual: fermentación, temperatura: 60°C, humedad: 80%"

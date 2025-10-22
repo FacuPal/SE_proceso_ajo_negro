@@ -3,12 +3,9 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import os
 from dotenv import load_dotenv
-# from langchain.agents import AgentExecutor, create_tool_calling_agent
-# from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-
-from typing import Dict, Any
 from langchain.agents import create_agent
 from tools.corrida_actual import tool_corrida_actual
+from tools.informacion_general import tool_informacion_general
 from utils.agent_config import SYSTEM_PROMPT
 
 # Cargar variables de entorno desde .env si existe
@@ -31,7 +28,8 @@ llm = ChatOllama(
 agent = create_agent(
     llm,
     tools=[
-        tool_corrida_actual
+        tool_corrida_actual,
+        tool_informacion_general,
     ],
 )
 
@@ -85,7 +83,7 @@ def chat_with_llama(message, history):
 gr.ChatInterface(
     fn=chat_with_llama, 
     type="messages",
-    title="🦆 Asistente mAIllard",
+    title="🧄 Asistente mAIllard 🧄",
     description="Asistente para el proceso de fermentación de ajo negro potenciado por IA (Llama3.2) y Neo4j.",
     examples=[
         "¿Qué es el ajo negro?",
