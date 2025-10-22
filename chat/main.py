@@ -108,7 +108,7 @@ def chat_with_llama(message, history):
 gr.ChatInterface(
     fn=chat_with_llama, 
     type="messages",
-    title="🦆 Asistente mAIllard",
+    title="🧄 Asistente mAIllard 🧄",
     description="Asistente para el proceso de fermentación de ajo negro potenciado por IA (Llama3.2) y Neo4j.",
     examples=[
         "¿Qué es el ajo negro?",
