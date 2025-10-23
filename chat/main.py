@@ -1,49 +1,54 @@
 import gradio as gr
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from agents.system_prompt import SYSTEM_PROMPT
-from agents.ollama_agent import retrieve_agent
+from langchain_core.messages import HumanMessage, SystemMessage
+from prompts.system_prompt import SYSTEM_PROMPT
+from agents.ollama_agent import get_agent
 from utils.logger import get_logger
 
 # Configurar logger para este módulo
 logger = get_logger(__name__)
 
-# Obtener el agente
-agent = retrieve_agent()
+class ChatApp():
+    def __init__(self):
+        # Obtener el agente
+        self.agent = get_agent()
 
-def chat_with_llama(message, history):
-    """
-    Función que procesa el mensaje del usuario y obtiene respuesta de Llama3.2 via LangChain.
+    def chat(self, message, history):
+        """
+        Función que procesa el mensaje del usuario y obtiene respuesta de Llama3.2 via LangChain.
+        
+        Args:
+            message: El mensaje actual del usuario
+            history: Historial de la conversación (lista de mensajes)   
+        
+        Returns:
+            La respuesta generada por el modelo
+        """
+        try:
+            # Armar mensajes con el prompt del sistema
+            messages = [
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=message)
+            ]
     
-    Args:
-        message: El mensaje actual del usuario
-        history: Historial de la conversación (lista de mensajes)   
-    
-    Returns:
-        La respuesta generada por el modelo
-    """
-    try:
-        # Armar mensajes con el prompt del sistema
-        messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=message)
-        ]
-  
-        # Invocar el modelo con LangChain
-        response = agent.invoke({
-            "messages": messages
-        })
+            # Invocar el modelo con LangChain
+            response = self.agent.invoke({
+                "messages": messages
+            })
 
-        return response["messages"][-1].content
+            return response["messages"][-1].content
 
-    except Exception as e:
-        return f"❌ Error al invocar el modelo: {str(e)}"
+        except Exception as e:
+            return f"❌ Error al invocar el modelo: {str(e)}"
 
 
 
 if __name__ == "__main__":
+    # Crear instancia de la aplicación de chat
+    app = ChatApp()
+    
     # Interfaz de Gradio con ChatInterface
     gr.ChatInterface(
-        fn=chat_with_llama, 
+        fn=app.chat,
         type="messages",
         title="🧄 Asistente mAIllard 🧄",
         description="Asistente inteligente para el proceso de fermentación de ajo negro.",

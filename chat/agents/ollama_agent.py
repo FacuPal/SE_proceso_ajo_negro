@@ -7,7 +7,7 @@ from utils.config import Config
 # Configuración 
 config = Config()
 
-def retrieve_agent():
+def get_agent():
     """
     Función que inicializa y retorna el agente de LangChain con las herramientas y configuración dadas.
     
