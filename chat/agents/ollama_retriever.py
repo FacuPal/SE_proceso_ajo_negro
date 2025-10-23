@@ -3,9 +3,12 @@ from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.config import Config
-
+from pathlib import Path
 # Cargar configuración
 config = Config()
+
+# Ruta a los documentos
+DOCS_PATH = Path(__file__).parent.parent / "documents"
 
 def get_retriever():
     """
@@ -21,7 +24,7 @@ def get_retriever():
 
     # Cargar documentos 
     def load_documents():
-        loader = PyPDFLoader("documents/ajo_negro.pdf")
+        loader = PyPDFLoader(DOCS_PATH / "ajo_negro.pdf")
         documents = loader.load()
 
 

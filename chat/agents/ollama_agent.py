@@ -20,6 +20,9 @@ def retrieve_agent():
         model=config.OLLAMA_MODEL,
         base_url=config.OLLAMA_BASE_URL,
         temperature=config.OLLAMA_TEMPERATURE,
+        reasoning=config.OLLAMA_REASONING,
+        top_k=config.OLLAMA_TOP_K,
+        top_p=config.OLLAMA_TOP_P,
     )
 
     return create_agent(

@@ -27,14 +27,18 @@ class Config:
 
             # Configuración del modelo Ollama
             self.OLLAMA_MODEL = getenv("OLLAMA_MODEL", "llama3.2:latest")
-            self.RAG_MODEL = "llama3.2:latest"
-            # Usar host.docker.internal para acceder al host desde el devcontainer
-            # Si está en el host, usar localhost; si está en container, usar host.docker.internal
             self.OLLAMA_BASE_URL = getenv("OLLAMA_HOST", "http://172.17.0.1:11434")
+            # Según buenas prácticas https://huggingface.co/Qwen/Qwen3-4B#best-practices
+            self.OLLAMA_REASONING = False
             try:
                 self.OLLAMA_TEMPERATURE = float(getenv("OLLAMA_TEMPERATURE", "0.7"))
             except (TypeError, ValueError):
                 self.OLLAMA_TEMPERATURE = 0.7
+            self.OLLAMA_TOP_K = 20
+            self.OLLAMA_TOP_P = 0.8
+
+            # Configuración del modelo de embedding
+            self.RAG_MODEL = getenv("RAG_MODEL", "embeddinggemma:latest")
 
             # Crear driver de conexión a Neo4j
             self.driver = GraphDatabase.driver(self.NEO4J_URI, auth=(self.NEO4J_USER, self.NEO4J_PASS))

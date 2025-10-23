@@ -22,26 +22,12 @@ def chat_with_llama(message, history):
         La respuesta generada por el modelo
     """
     try:
-        # Construir el historial de mensajes para LangChain
-        messages = [SystemMessage(content=SYSTEM_PROMPT)]
-        
-        # Agregar historial previo si existe
-        for msg in history:
-            if isinstance(msg, dict):
-                # Formato nuevo de Gradio con roles
-                if msg.get("role") == "user":
-                    messages.append(HumanMessage(content=msg.get("content", "")))
-                elif msg.get("role") == "assistant":
-                    messages.append(AIMessage(content=msg.get("content", "")))
-            elif isinstance(msg, (list, tuple)) and len(msg) == 2:
-                # Formato antiguo de Gradio: (user_msg, bot_msg)
-                messages.append(HumanMessage(content=msg[0]))
-                if msg[1]:
-                    messages.append(AIMessage(content=msg[1]))
-        
-        # Agregar mensaje actual del usuario
-        messages.append(HumanMessage(content=message))
-        
+        # Armar mensajes con el prompt del sistema
+        messages = [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=message)
+        ]
+  
         # Invocar el modelo con LangChain
         response = agent.invoke({
             "messages": messages
