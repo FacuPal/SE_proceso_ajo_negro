@@ -6,38 +6,51 @@ from pydantic import BaseModel
 
 logger = get_logger(__name__)
 
-class Corrida(BaseModel):
-    id: str
-    etapa: str
+class Alerta(BaseModel):
+    ts: str
+    tipo: str
+    activa: bool
+    explicacion: str
 
 # ============================================================================
-# TOOL Corrida Actual: Obtener la corrida actual
+# TOOL Alertas: Obtiene las alertas disparadas por el sistema experto
 # ============================================================================
-# Permite obtener de la base de datos la corrida que no tiene fecha de fin asignada.
-# Si existe, devuelve los detalles de la corrida.
+# Permite obtener de la base de datos las alertas activas de la corrida en ejecución.
 CY_ADD_TOOL = """
-MATCH (c:Corrida)
-OPTIONAL MATCH (c)-[rFechaFin:HAS_VALUE {slot: 'fechaFin'}]->(:Slot)
-MATCH (c)-[:ETAPA_ACTUAL]->(:Etapa)-[rEtapa:HAS_VALUE {slot: 'name'}]->(:Slot)
-WHERE rFechaFin IS NULL
-RETURN c.id as id, rEtapa.value as etapa
+MATCH (c:Corrida {id: $idCorrida})-[rAlerta:ALERTA]->(a:Alerta)
+MATCH (a)-[rTs:HAS_VALUE {slot: 'ts'}]->(:Slot)
+MATCH (a)-[rName:HAS_VALUE {slot: 'name'}]->(:Slot)
+MATCH (a)-[rActivo:HAS_VALUE {slot: 'activo'}]->(:Slot)
+MATCH (a)-[rExplicacion:HAS_VALUE {slot: 'explicacion'}]->(:Slot)
+WHERE rActivo IS NOT NULL and rActivo.value = true
+RETURN  toString(rTs.value) as ts,
+        rName.value as tipo,
+        rActivo.value as activa,
+        rExplicacion.value as explicacion
 """
 @tool(
-    "tool_corrida_actual",
-    description="Herramienta para obtener información sobre la corrida actual. Si devuelve null, se considera que no hay corrida activa.",
-
+    "tool_alertas",
+    description="Herramienta para obtener las alertas disparadas por el sistema experto.",
 )
-def tool_corrida_actual()->Optional[Corrida]:
+def tool_alertas(id_corrida: str) -> Optional[list[Alerta]]:
     """
-    Obtiene información sobre la corrida actual.
+    Obtiene las alertas disparadas por el sistema experto en base a los parámetros de temperatura y estado de actuadores. 
+    Requiere obtener el id de la corrida actual mediante la herramienta tool_corrida_actual.
+
+    Args:
+        id_corrida: ID de la corrida actual. Proviene del resultado de tool_corrida_actual.
     Returns:
-        Corrida actual o None si no hay corrida activa.
+        list[Alerta] o None si no hay corrida activa o no hay alertas activas.
     """
-    logger.info("Ejecutando tool_corrida_actual")
+    logger.info(f"Ejecutando tool_alertas con id_corrida: {id_corrida}")
     try:
-        response = Corrida.model_validate(run_cypher(CY_ADD_TOOL)[0])
-        logger.info(f"Resultado tool_corrida_actual: {response}")
+        ret = run_cypher(CY_ADD_TOOL, {
+            "idCorrida": id_corrida
+        })
+        logger.info(f"Resultado raw de Cypher tool_alertas: {ret}")
+        response = [Alerta.model_validate(item) for item in ret]
+        logger.info(f"Resultado tool_alertas: {response}")
         return response
     except Exception as e:
-            logger.info("No hay corrida activa.")
+            logger.info(f"No hay corrida activa o no hay alertas activas. {str(e)}")
             return None

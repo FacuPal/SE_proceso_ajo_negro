@@ -1,5 +1,8 @@
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
+from tools.cargar_lectura import tool_registrar_lectura
+from tools.alertas import tool_alertas
+from tools.recomendaciones import tool_recomendaciones
 from tools.estado_parametros import tool_estado_parametros
 from tools.corrida_actual import tool_corrida_actual
 from tools.informacion_general import tool_informacion_general
@@ -31,6 +34,9 @@ def get_agent():
         tools=[
             tool_corrida_actual,
             tool_informacion_general,
-            tool_estado_parametros, 
+            tool_estado_parametros,
+            tool_recomendaciones,
+            tool_alertas,
+            tool_registrar_lectura,
         ],
     )
