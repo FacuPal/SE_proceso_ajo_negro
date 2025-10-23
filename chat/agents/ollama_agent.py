@@ -1,5 +1,6 @@
 from langchain_ollama import ChatOllama
 from langchain.agents import create_agent
+from tools.estado_parametros import tool_estado_parametros
 from tools.corrida_actual import tool_corrida_actual
 from tools.informacion_general import tool_informacion_general
 from utils.config import Config
@@ -30,5 +31,6 @@ def get_agent():
         tools=[
             tool_corrida_actual,
             tool_informacion_general,
+            tool_estado_parametros, 
         ],
     )
