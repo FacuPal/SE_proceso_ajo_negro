@@ -55,8 +55,11 @@ if __name__ == "__main__":
         examples=[
             "¿Qué es el ajo negro?",
             "¿Cuál es la temperatura ideal para la fermentación?",
-            "Explícame el proceso de fermentación del ajo negro",
-            "¿Existe algúna corrida activa?"
+            "¿Existe algúna corrida activa?",
+            "¿Cual es la temperatura actual?",
+            "¿Qué acción recomienda el sistema?",
+            "¿Hay alguna alerta activa?",
+            "¿Puedo registrar una lectura manualmente?"
         ],
     ).launch()
     
