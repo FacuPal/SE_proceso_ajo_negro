@@ -1,8 +1,14 @@
+from typing import Optional
 from utils.run_cypher import run_cypher
 from langchain_core.tools import tool
 from utils.logger import get_logger
+from pydantic import BaseModel
 
 logger = get_logger(__name__)
+
+class Corrida(BaseModel):
+    id: str
+    etapa: str
 
 # ============================================================================
 # TOOL Corrida Actual: Obtener la corrida actual
@@ -18,11 +24,20 @@ RETURN c.id as id, rEtapa.value as etapa
 """
 @tool(
     "tool_corrida_actual",
-    description="Tool que permite obtener información sobre la corrida actual. Si existe, devuelve los detalles de la corrida.",
+    description="Herramienta para obtener información sobre la corrida actual. Si devuelve null, se considera que no hay corrida activa.",
+
 )
-def tool_corrida_actual():
+def tool_corrida_actual()->Optional[Corrida]:
     """
     Obtiene información sobre la corrida actual.
+    Returns:
+        Corrida actual o None si no hay corrida activa.
     """
     logger.info("Ejecutando tool_corrida_actual")
-    return run_cypher(CY_ADD_TOOL)
+    try:
+        response = Corrida.model_validate(run_cypher(CY_ADD_TOOL)[0])
+        logger.info(f"Resultado tool_corrida_actual: {response}")
+        return response
+    except Exception as e:
+            logger.info("No hay corrida activa.")
+            return None
