@@ -935,7 +935,7 @@ MERGE (ven)-[cVen:HAS_VALUE {slot:'capacidad',value:-0.5}]->(slCapacidad)
 MERGE (ven)-[tfpVen:HAS_VALUE {slot:'tipoFuncionPrendido', value:'gaussiana'}]->(slTipoFuncionPrendido)
   ON CREATE SET tfpVen.source='seed', tfpVen.ts=datetime()
   ON MATCH  SET tfpVen.source='seed', tfpVen.ts=datetime()
-MERGE (ven)-[pMediaVen:HAS_VALUE {slot:'prendidoMedia', value:-0.06}]->(slPrendidoMedia)
+MERGE (ven)-[pMediaVen:HAS_VALUE {slot:'prendidoMedia', value:-0.6}]->(slPrendidoMedia)
   ON CREATE SET pMediaVen.source='seed', pMediaVen.ts=datetime()
   ON MATCH  SET pMediaVen.source='seed', pMediaVen.ts=datetime()
 MERGE (ven)-[pSigmaVen:HAS_VALUE {slot:'prendidoSigma', value:0.6}]->(slPrendidoSigma)
@@ -1032,7 +1032,7 @@ MERGE (recM)-[:CONFLICTA_CON]->(recAC);
 
 
 // ===================== Triggers =====================
-CALL apoc.util.sleep(4000); // Esperar a que se creen los índices y constraints
+//CALL apoc.util.sleep(4000); // Esperar a que se creen los índices y constraints
 
 CALL db.clearQueryCaches(); // Borrar caches de consultas
 
