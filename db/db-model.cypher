@@ -162,7 +162,11 @@ CALL apoc.custom.installProcedure(
       // Determinar el nuevo estado basado en la tendencia
       WITH corrida, tendencia, now, ventilador, capVent,
             1 / (1 + exp(-(apagadoCVent) * (tendencia - apagadoBVent))) AS mu_apagado,
-            exp(-((tendencia - prendidoMediaVent)^2) / (2 * (prendidoSigmaVent^2))) AS mu_prendido
+            //exp(-((tendencia - prendidoMediaVent)^2) / (2 * (prendidoSigmaVent^2))) AS mu_prendido
+            apoc.coll.max([
+              exp(-((tendencia - -0.6)^2) / (2 * (0.3^2))), //campana centrada en -0.6
+              exp(-((tendencia - 0.5)^2) / (2 * (0.3^2))) //campana centrada en 0.5
+              ]) AS mu_prendido
 
       // Actualizar los valores de pertenencia en el ventilador
       MATCH (slUPrendido:Slot {name:'uPrendido'})
