@@ -24,6 +24,7 @@ class ChatApp():
             La respuesta generada por el modelo
         """
         try:
+            logger.info(f"Mensaje recibido: {message}")
             # Armar mensajes con el prompt del sistema
             messages = [
                 SystemMessage(content=SYSTEM_PROMPT),
@@ -34,6 +35,7 @@ class ChatApp():
             response = self.agent.invoke({
                 "messages": messages
             })
+            logger.info(f"Respuesta del modelo: {response['messages'][-1].content}")
 
             return response["messages"][-1].content
 
