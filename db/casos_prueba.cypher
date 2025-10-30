@@ -38,6 +38,7 @@ CALL apoc.util.sleep(1000); // Esperar 1 segundo para diferenciar timestamps
 // tendencia 2 => Calefactor prendido y ventilador apagado
 MATCH (c:Corrida)-[:ETAPA_ACTUAL]->(etapa:Etapa)
 OPTIONAL MATCH (c)-[r:HAS_VALUE {slot: 'fechaFin'}]->()
+WITH c, etapa, r
 WHERE r IS NULL OR r.value IS NULL
 MATCH (LectClass:FrameClass {name:'Lectura'})
 MATCH (slLName:Slot {name:'name'})

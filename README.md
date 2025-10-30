@@ -1,270 +1,140 @@
-# 1- Objetivo y alcance
-- Objetivo: dado una Corrida en cierta Etapa, clasificar la TemperaturaInterna respecto del Rango de esa etapa y, según el estado resultante y los estados de los actuadores, emitir Recomendaciones de control.
-- Alcance actual: temperatura (diagnóstico de Baja/EnRango/Alta) y acciones sobre Calefactor/Ventilador.
-# 2- Ontología: piezas clave del dominio
-## Proceso y etapas
-- Corrida-[TIENE_ETAPA_ACTUAL]->Etapa.
-- Cada Etapa-[CONFIGURA_TEMPERATURA]->Rango.
-- Rango define límites por ValorEsperado y Tolerancia, y sus derivados Minimo y Maximo (ej.: ProcesoTermico con 80 ± 3 → 77..83).
+# Informe Ejecutivo - Sistema experto para el proceso de ajo negro
 
-## Medición y diagnóstico
-- Corrida-[TIENE_TEMPERATURA]->TemperaturaInterna.
-- Estados de temperatura: TemperaturaBaja, TemperaturaEnRango, TemperaturaAlta.
-- Reglas (comparadores): 
-    - TemperaturaInterna-[SI_ES]->Menor/Entre/Mayor
-    - Menor/Entre/Mayor-[QUE]->Rango; 
-    - Menor/Entre/Mayor-[PRODUCE]->Estado.
+## Tabla de contenidos
+- [Introducción](#introducción)
+- [Objetivos](#objetivos)
+	- [Objetivo general](#objetivo-general)
+	- [Objetivos específicos](#objetivos-específicos)
+- [Módulos](#módulos)
+	- [Base de conocimiento](#base-de-conocimiento)
+	- [Modelo de lenguaje de gran escala (LLM)](#modelo-de-lenguaje-de-gran-escala-llm)
+	- [Aplicación Chat](#aplicación-chat)
+- [Resultados obtenidos](#resultados-obtenidos)
+- [Limitaciones y próximos pasos](#limitaciones-y-próximos-pasos)
+- [Lecciones aprendidas](#lecciones-aprendidas)
+- [Documentación técnica](#documentación-técnica)
 
-  _Nota:_ Interpretación práctica: Menor ≡ T < Minimo; Entre ≡ Minimo < T < Maximo; Mayor ≡ T > Maximo.
-## Actuadores y recomendaciones
-- Calefactor y Ventilador son Actuadores con EstadoActuador (Prendido/Apagado) y CapacidadTermica (efecto sobre la temperatura).
-- Recomendaciones: Encender/Apagar cada actuador, Mantener. Se activan mediante la ejecución de las reglas de control: 
-  - Recomendación-[REQUIER]->EstadoTemperatura 
-  - Recomendación-[REQUIERE]->(estado de actuador), 
-  - Recomendación-[TIENE]->PRIORIDAD.
+## Introducción
 
-# 3. Flujo de inferencia (paso a paso)
-## Paso 1: Rango activo
-A partir de la instanciación de la corrida: 
-- Corrida-[TIENE_ETAPA_ACTUAL]->Etapa 
-- Etapa-[CONFIGURA_TEMPERATURA]->Rango
+El ajo negro es el producto resultante del envejecimiento térmico del ajo fresco (Allium sativum L.) mediante un proceso controlado de temperatura y humedad que transforma las características físicas, químicas y organolépticas del ajo blanco convencional. Contrario a lo que sugiere el término "fermentación", este proceso no es una verdadera fermentación microbiana, sino una transformación química compleja que involucra principalmente la reacción de Maillard y otros procesos de oxidación.
 
-El motor selecciona el Rango vigente (Minimo/Maximo) para evaluar la temperatura.
+En este contexto, se desarrolló un sistema experto para el análisis de la situación actual y la recomendación de acciones en el proceso de fermentación de ajo negro. El proyecto combina técnicas clásicas de inteligencia artificial, como redes semánticas, marcos y reglas lógicas de inferencia, con herramientas contemporáneas basadas en modelos de lenguaje (LLM), para ofrecer un entorno de consulta natural y explicativo.
 
-## Paso 2: Estado de temperatura
-La Corrida obtiene TemperaturaInterna y la clasifica ejecutando las reglas lógicas Menor/Entre/Mayor comparándolas con el Rango.
-
-__Resultado:__ Corrida-[DETECTA]->TemperaturaBaja/EnRango/Alta.
-
-## Paso 3: Reglas de control candidatas
-Se activan las Reglas cuya condición [REQUIERE]-> coincide con el estado detectado.
-Cada Regla verifica además [REQUIERE] sobre el actuador (p. ej., “CalefactorPrendido”).
-
-## Paso 4: Pesos y umbrales (Si es que lo implementamos)
-### Umbrales locales por regla:
-  UMBRAL_EXCESO: exceso mínimo sobre Maximo para considerar reglas de “Alta”.
-  UMBRAL_DEFICIT: déficit mínimo bajo Minimo para “Baja”.
-### Pesos:
-  CONFIANZA en cada regla (0..1): qué tan confiable es la recomendación en ese contexto.
-  SEVERIDAD en Estados (opcional, 0..1): impacto relativo de Alta vs. Baja.
-### Umbral global:
-    Corrida-[UMBRAL_DECISION]->x: puntaje mínimo para “emitir” la recomendación.
-### Forma de cálculo (Orientativo):
-    delta = distancia a límite (ej.: T − Maximo si Alta; Minimo − T si Baja; 0 si EnRango).
-    pasa_umbral = delta ≥ UMBRAL_EXCESO/DEFICIT (si aplica).
-    puntaje_regla = CONFIANZA_regla × SEVERIDAD_estado × f(delta) donde f(delta) puede ser, por ejemplo, min(1, delta/escala).
-    Emitir si puntaje_regla ≥ UMBRAL_DECISION.
-
-## Paso 5: Resolución de conflictos y priorización
-Si varias reglas producen acciones incompatibles, usar:
-- PRIORIDAD para desempatar.
-- Las aristas CONFLICTA_CON para no emitir pares opuestos (p. ej., EncenderCalefactor vs. ApagarCalefactor).
-
-## Paso 6: Emisión y trazabilidad
-Una vez evaluadas las recomendaciones, estas son asignadas a la corrida por medi de la relación Corrida-[RECOMIENDA]->Recomendacion para cada acción aceptada.
-
-La explicación “por qué” se obtiene recorriendo las relaciones [REQUERE] de la recomendación y los comparadores usados con el Rango.
- 
- # 4. Cómo se usan concretamente los pesos/umbrales (Si se implementan)
-En el grafo, se agregan propiedades numéricas a Estados, Reglas y Corrida:
-- Estado: SEVERIDAD (ej., Alta/Baja 0.8; EnRango 0).
-- Regla: CONFIANZA, UMBRAL_EXCESO/UMBRAL_DEFICIT (°C) y, si querés, UMBRAL_ABSOLUTO, VENTANA_TIEMPO para persistencia.
-- Corrida: UMBRAL_DECISION (0..1) como corte global.
-
-El motor de inferencia lee estos valores para filtrar reglas (por umbral), ponderarlas (por confianza/severidad) y decidir la emisión (por umbral global). Así se reducen falsas alarmas, se jerarquizan acciones y se gana robustez.
-
-## [Red semántica](.\docs\red_semantica.md) 
+El resultado es un prototipo funcional que asiste al operador en la supervisión del proceso, identifica desviaciones de temperatura y sugiere acciones correctivas, combinando razonamiento y procesamiento del lenguaje natural.
+Este informe recorre el proceso de desarrollo de la herramienta mencionada, revisando sus módulos, resultados obtenidos y próximos pasos.
 
 
+## Objetivos
+
+### Objetivo general
+
+Desarrollar un sistema experto capaz de analizar el estado del proceso, inferir nuevas condiciones a partir de reglas de conocimiento y recomendar acciones al operador mediante una interfaz conversacional.
+
+### Objetivos específicos
+
+- Modelar el conocimiento del dominio e implementarlo en una base de conocimiento en Neo4J.
+- Diseñar un agente inteligente que integre la base de conocimiento con un LLM ejecutado en Ollama.
+- Desarrollar una interfaz conversacional que permita al operario realizar consultas en lenguaje natural y recibir respuestas explicativas y contextualizadas.
+- Identificar limitaciones y oportunidades de mejora, con foco en la escalabilidad del modelo.
+
+## Módulos
+
+El proyecto se organizó en tres módulos principales que, de manera integrada, conforman el flujo completo de adquisición, razonamiento e interacción con el usuario. Cada integrante del equipo compartió la responsabilidad del desarrollo de los módulos, fomentando un ambiente colaborativo.
+
+### Base de conocimiento
+
+La base de conocimiento es el componente principal del sistema, el que mantiene los hechos y las reglas lógicas de inferencia.
+
+La base de conocimiento se construyó en etapas, comenzando por diagramar la red semántica que representa el conocimiento del dominio, luego transformándola en una red de marcos, permitiendo estructurar jerarquía de conceptos, atributos y reglas asociadas, para posteriormente implementarlo en Neo4j.
+
+En esta base de datos, se aplicaron triggers de apoc, plugin de Neo4j, para ejecutar inferencias automáticas en base a eventos del sistema, por ejemplo, detectar si la tendencia actual excede el umbral definido, generando una nueva Alerta. De este modo, el sistema mantiene actualizado el conocimiento sin intervención humana directa.
 
 
-# Lógica difusa
-La temperaturaInterna va a tener grados de pertenencia a los 3 estados:
-- TemperaturaAlta
-- TemperaturaEnRango
-- TemperaturaBaja
+### Modelo de lenguaje de gran escala (LLM)
 
-Los a y b los guardamos en las configuraciones de las etapas (porque dependen de la etapa actual).+
+El segundo módulo integra el razonamiento simbólico con un componente de procesamiento de lenguaje natural. 
 
-El estado de los actuadores (Encendido y Apagado) pasa a ser nivel de pertenencia, por lo que cada actuador tendrá grado de pertenencia a:
-- Encendido
-- Apagado
+Se implementó un agente con la librería _**LangChain**_ que integra la base de conocimiento y el modelo de lenguaje desplegado localmente mediante _**Ollama**_. Este agente gestiona las consultas del usuario, selecciona las herramientas adecuadas, y construye una respuesta coherente y explicativa.
 
-El nivel de pertenencia se podría calcular en base a las tendencia de la variable de temperatura. Se guardan a y b en cada estado, y en base al valor de la tendencia (que se podría aplicar un demonio if-modified o if-added para consultarlo de una db o simulación externa) se evalúa el nivel de pertenencia.
+El modelo utilizado fue _qwen3:4b-instruct_, acompañado del modelo _embeddinggemma_ para la búsqueda semántica y la recuperación aumentada del conocimiento (RAG). De esta manera el sistema combina inferencia basada en reglas con razonamiento probabilístico y comprensión contextual, logrando respuestas más precisas y naturales.
 
-Las reglas se deberán modificar, aplicando lógica difusa para la evaluación de las condiciones Max(u, v) para los AND.
+### Aplicación Chat
+
+El tercer y último módulo corresponde a la capa de interacción con el usuario, donde se construyó una interfaz conversacional en Python, utilizando la librería Gradio, que permite al usuario realizar consultas en lenguaje natural sobre el proceso del ajo negro.
+
+La interfaz ofrece un entorno intuitivo en el que el operador puede, por ejemplo, preguntar “¿La temperatura actual es adecuada?”, recibiendo respuestas argumentadas y fundamentadas en la base de conocimiento.
 
 
+<div align="center">
 
-# Ideas futuras
-## 1.Modelar pesos y umbrales como propiedades numéricas en las reglas/estados y un umbral global de decisión en Monitoreo.
-- Rango activo: obtener Minimo/Maximo de la Etapa actual de la Corrida.
-- Delta térmico:
-  - Si TemperaturaAlta: delta = T − Maximo.
-  - Si TemperaturaBaja: delta = Minimo − T.
-  - Si EnRango: delta = 0.
-- Filtrado por regla:
-  - Para “Alta”: delta ≥ UMBRAL_EXCESO de la regla.
-  - Para “Baja”: delta ≥ UMBRAL_DEFICIT de la regla.
-- Puntaje de regla:
-  - g(delta) = min(1, delta/escala) (ej.: escala=5 °C).
-  - score = CONFIANZA(regla) × SEVERIDAD(estado) × g(delta).
-- Decisión:
-  - Emitir recomendación si score ≥ UMBRAL_DECISION (de Monitoreo).
-  - Resolver conflictos usando PRIORIDAD y CONFLICTA_CON (mantener la de mayor score/prioridad).    
+![Diagrama de Módulos](docs/img/Arquitectura.png)
 
-- Pesos y umbrales (decisión)
-  ``` 
-    -- Severidad por estado térmico (0..1)
-    TemperaturaAlta-[SEVERIDAD]->0.8
-    TemperaturaBaja-[SEVERIDAD]->0.8
-    TemperaturaEnRango-[SEVERIDAD]->0.0
+Figura 1: Diagrama de Módulos
 
-    -- Umbral global para emitir recomendaciones (0..1)
-    Monitoreo-[UMBRAL_DECISION]->0.6
-
-    -- Confianza y umbrales locales por regla (°C de exceso/deficit sobre el rango activo)
-    Regla_ApagarCalefactor-[CONFIANZA]->0.9
-    Regla_ApagarCalefactor-[UMBRAL_EXCESO]->2
-
-    Regla_EncenderVentilador-[CONFIANZA]->0.8
-    Regla_EncenderVentilador-[UMBRAL_EXCESO]->1
-
-    Regla_EncenderCalefactor-[CONFIANZA]->0.85
-    Regla_EncenderCalefactor-[UMBRAL_DEFICIT]->1
-
-    Regla_ApagarVentilador-[CONFIANZA]->0.75
-    Regla_ApagarVentilador-[UMBRAL_DEFICIT]->0.5
-  ``` 
+</div>
 
 
-## 2. Incorporar el histórico de lecturas de temperatura para análisis de tendencias y detección de fallas.
-Esta funcionalidad podría podría modelarse como una métrica que, a partir de un demonio, se obtenga el valor desde una base de datos externa
-  ```
-  -- Contexto de la lectura (trazabilidad)
-  Lectura-[DE_CORRIDA]->Corrida
-  Lectura-[EN_ETAPA]->Etapa
-  Lectura-[DE_VARIABLE]->TemperaturaInterna  -- aclara qué variable mide
+## Resultados obtenidos
 
-  -- Serie temporal y agregados en ventana
-  SerieLecturas
-  SerieLecturas-[DE_CORRIDA]->Corrida
-  SerieLecturas-[DE_VARIABLE]->TemperaturaInterna
-  SerieLecturas-[TIENE_LECTURA]->Lectura
-  SerieLecturas-[VENTANA_MIN]->Valor
+El sistema experto desarrollado alcanzó un nivel de funcionamiento estable y demostrable en los tres componentes principales. La integración permitió validar la coherencia de las inferencias, la conectividad entre módulos y la generación de respuestas contextualizadas ante consultas del operador.
 
-  -- Metrica
-  MaximoVentana-[TIPO_DE]->Metrica
-  MinimoVentana-[TIPO_DE]->Metrica
-  PromedioVentana-[TIPO_DE]->Metrica
-  PendienteVentana-[TIPO_DE]->Metrica      -- °C/min
-  DesvioVentana-[TIPO_DE]->Metrica
-  TiempoFueraDeRango-[TIPO_DE]->Metrica     -- min
-  TiempoEnRango-[TIPO_DE]->Metrica
+<div align="center">
 
-  SerieLecturas-[CALCULA]->Metrica
+![Asistente mAIllard](docs/img/app_home.png)
 
-  -- Recomendaciones/Alertas adicionales
-  AlertaDesviacionPersistente-[TIPO_DE]->Recomendacion
-  VerificarSensor-[TIPO_DE]->Recomendacion
-  SugerirAvanzarEtapa-[TIPO_DE]->Recomendacion
+Figura 2: Asistente mAIllard
 
-  -- Umbrales para reglas temporales y de tendencia
-  Regla_Alta_Persistente-[TIPO_DE]->Regla
-  Regla_Alta_Persistente-[SI]->TemperaturaAlta
-  Regla_Alta_Persistente-[VENTANA_TIEMPO]->5      -- min fuera de rango
-  Regla_Alta_Persistente-[PRODUCE]->AlertaDesviacionPersistente
-  Regla_Alta_Persistente-[CONFIANZA]->0.8
-  Regla_Alta_Persistente-[PRIORIDAD]->8
+</div>
 
-  Regla_Baja_Persistente-[TIPO_DE]->Regla
-  Regla_Baja_Persistente-[SI]->TemperaturaBaja
-  Regla_Baja_Persistente-[VENTANA_TIEMPO]->5
-  Regla_Baja_Persistente-[PRODUCE]->AlertaDesviacionPersistente
-  Regla_Baja_Persistente-[CONFIANZA]->0.8
-  Regla_Baja_Persistente-[PRIORIDAD]->8
-
-  Regla_Tendencia_Ascendente-[TIPO_DE]->Regla
-  Regla_Tendencia_Ascendente-[SI]->TemperaturaEnRango   -- aún en rango, pero subiendo
-  Regla_Tendencia_Ascendente-[UMBRAL_PENDIENTE]->0.5    -- °C/min
-  Regla_Tendencia_Ascendente-[PRODUCE]->EncenderVentilador
-  Regla_Tendencia_Ascendente-[CONFIANZA]->0.7
-  Regla_Tendencia_Ascendente-[PRIORIDAD]->6
-
-  -- Sanidad de sensor usando histórico
-  Regla_Sensor_Atascado-[TIPO_DE]->Regla
-  Regla_Sensor_Atascado-[VENTANA_TIEMPO]->10
-  Regla_Sensor_Atascado-[UMBRAL_VAR_MIN]->0.1          -- °C de variación mínima
-  Regla_Sensor_Atascado-[PRODUCE]->VerificarSensor
-  Regla_Sensor_Atascado-[CONFIANZA]->0.9
-  Regla_Sensor_Atascado-[PRIORIDAD]->9
-
-  Regla_Salto_Brusco-[TIPO_DE]->Regla
-  Regla_Salto_Brusco-[UMBRAL_SALTO]->5                 -- °C entre lecturas consecutivas
-  Regla_Salto_Brusco-[PRODUCE]->VerificarSensor
-  Regla_Salto_Brusco-[CONFIANZA]->0.9
-  Regla_Salto_Brusco-[PRIORIDAD]->9
-
-  -- Transición de etapa (requiere duración modelada)
-  Etapa-[DURACION_MIN]->Valor
-  Regla_Avanzar_Etapa-[TIPO_DE]->Regla
-  Regla_Avanzar_Etapa-[SI]->TemperaturaEnRango
-  Regla_Avanzar_Etapa-[VENTANA_TIEMPO]->30             -- min estable en rango
-  Regla_Avanzar_Etapa-[PRODUCE]->SugerirAvanzarEtapa
-  Regla_Avanzar_Etapa-[CONFIANZA]->0.8
-  Regla_Avanzar_Etapa-[PRIORIDAD]->7
-  ``` 
-
-## 3.Enriquecer el control térmico con histéresis, persistencia, límites de seguridad y manejo de sensor.
+Desde esta interfaz, el operario puede realizar las siguientes consultas:
+- Solicitar información general del ajo negro y el proceso de fermentación: Esta consulta será contestada utilizando los documentos vectorizados en la base de datos vectorial utilizando RAG.
+- Consultar corrida en curso: Brindará información sobre si existe una corrida en curso y su etapa actual.
+- Consultar el estado de los parámetros: Contestará el estado actual de la variable de temperatura y el estado del calefactor y ventilador, en caso que exista una corrida activa. Además, clasificará el estado de la temperatura según el valor esperado para la etapa en curso.
+- Consultar recomendaciones: Buscará las acciones recomendadas por el sistema experto en base al estado actual de los parámetros.
+- Consultar alertas: Devolverá eventos de alerta en caso de existir.
+- Registrar una lectura de manera manual: Permitirá al operario cargar una lectura de temperatura y tendencia, enviando los datos en la consulta.
 
 
+<div align="center">
 
-# Iniciar Neo4J
-```
-  docker run \
-    -p 7474:7474 -p 7687:7687 \
-    -v $PWD/neo4j/data:/data -v $PWD/neo4j/plugins:/plugins \
-    --name neo4j-apoc \
-    -e NEO4J_AUTH=none \
-    -e NEO4J_apoc_export_file_enabled=true \
-    -e NEO4J_apoc_import_file_enabled=true \
-    -e NEO4J_dbms_transaction_timeout="10s" \
-    -e NEO4J_apoc_trigger_enabled=true \
-    -e NEO4J_apoc_import_file_use___neo4j___config=true \
-    -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
-    neo4j:4.4-community
+![Consulta temperatura](docs/img/app_temperatura_actual.png)
 
-``` 
+Figura 3: Consulta de temperatura actual (insertar captura aquí)
 
-// Crear una instancia de corrida
-// Match FrameClass
-MATCH (c:FrameClass {name: 'Corrida'}), (t:FrameClass {name: 'Temperatura'})
-// Match Slots
-MATCH (sTemp:Slot {name: 'temperaturaInterna'}), (sValor:Slot {name: 'valor'}), (sEtAct:Slot {name: 'etapaActual'})
-// Match Instances
-MATCH (prot:Etapa {id: 'proceso_termico'}), (enf:Etapa {id: 'enfriamiento'})
-MERGE (t)<-[:INSTANCE_OF]-(ti:FrameInstance {id: 'temperatura_interna_corrida_1'})-[:HAS_VALUE {slot: 'valor', value: 82.0}]->(sValor)
-MERGE (c)<-[:INSTANCE_OF]-(ci:FrameInstance:Corrida {id: '1'})-[:HAS_VALUE {slot: 'temperaturaInterna', value: ti.id}]->(sTemp)
-MERGE (ci)-[:HAS_VALUE {slot: 'etapaActual', value: prot.id}]->(sEtAct)
+</div>
+
+## Limitaciones y próximos pasos
+
+El resultado de este desarrollo es un primer prototipo funcional acotado que sólo se enfoca en el subproceso de análisis de la situación actual y recomendación de acciones, contemplando un único parámetro que es la temperatura, dejando afuera parámetros como la humedad relativa, la calidad de aire, el pH, entre otros.
+
+Asimismo, se detecta como principal limitación la capacidad de procesamiento de los modelos desplegados de manera local, haciendo que el tiempo de respuesta dependa de los recursos asignados al modelo y del nivel de carga del sistema en un momento determinado. 
+
+Otra limitación que el sistema posee es la utilización de una base de datos vectorial en memoria, decisión tomada en pos de la simplicidad del desarrollo. Esta base de datos vectorial es efímera, y se recrea al momento de ejecutar la aplicación.
+
+En este orden de ideas, los próximos pasos para extender el sistema serían el modelado e incorporación de los parámetros faltantes (humedad relativa, calidad de aire, pH), modificando las reglas lógicas implementadas y la incorporación de nuevas funcionalidades relacionadas al subproceso.
+
+Esta extensión es posible debido al diseño modular elegido durante el desarrollo del sistema, donde se definió una arquitectura de la base de conocimiento y del agente LLM para que pueda ser lo suficientemente flexible como para incorporar nuevos elementos y funcionalidades.
+
+En cuanto a las limitaciones, las próximas tareas para mejorar el sistema serían el reemplazo del modelo local por algún modelo comercialmente disponible, cambio que requeriría una inversión monetaria, y la incorporación de una base de datos vectorial persistente, como ChromaDB.
 
 
+## Lecciones aprendidas
 
-// Match FrameClass
-MATCH (c:FrameClass {name: 'Corrida'}), (t:FrameClass {name: 'Temperatura'})
-// Match Slots
-MATCH (sTemp:Slot {name: 'temperaturaInterna'}), (sValor:Slot {name: 'valor'}), (sEtAct:Slot {name: 'etapaActual'})
-// Match Instances
-MATCH (prot:Etapa {id: 'proceso_termico'}), (enf:Etapa {id: 'enfriamiento'})
-MERGE (t)<-[:INSTANCE_OF]-(ti:FrameInstance {id: 'temperatura_interna_corrida_2'})-[:HAS_VALUE {slot: 'valor', value: 36.0}]->(sValor)
-MERGE (c)<-[:INSTANCE_OF]-(ci:FrameInstance:Corrida {id: '2'})-[:HAS_VALUE {slot: 'temperaturaInterna', value: ti.id}]->(sTemp)
-MERGE (ci)-[:HAS_VALUE {slot: 'etapaActual', value: enf.id}]->(sEtAct)
+A partir de este proyecto, hemos podido aprender a trabajar de manera colaborativa en el contexto del desarrollo de un sistema experto, utilizando herramientas que no habíamos utilizado al momento en la carrera.
 
+Por otro lado, hemos tenido que investigar, probar y aprender acerca de los mejores modelos para implementar en nuestro contexto, como así también descubrir las mejores configuraciones que permitían al modelo comportarse de la manera más óptima con los recursos disponibles.
 
-// Inferir temperatura y estado
-WITH 1 as corridaId
-MATCH (c:FrameInstance:Corrida)-[rid:HAS_VALUE {slot:'id'}]->(:Slot {name:'id'})
-WHERE toInteger(rid.value) = toInteger(corridaId)
-MATCH (c)-[:TIENE_TEMPERATURA]->(t:FrameInstance:Temperatura)
-OPTIONAL MATCH (t)-[rv:HAS_VALUE {slot:'valor'}]->(:Slot {name:'valor'})
-OPTIONAL MATCH (t)-[re:HAS_VALUE {slot:'estado'}]->(:Slot {name:'estado'})
-RETURN toInteger(rid.value) AS corridaId, t.id AS temperaturaId, rv.value AS valor, re.value AS estado
+Finalmente, esta fue una buena experiencia para reforzar la práctica de creación de prompt, ya que hemos tenido que armar, probar e iterar sobre el prompt utilizado, de forma tal de reducir alucinaciones y mejorar la fidelidad de las respuestas del modelo.
+
+## Documentación técnica
+
+Para información detallada de cada módulo, consulte las siguientes fichas técnicas:
+
+- [Red de Procesos - Sistema Experto](docs/red_de_procesos_sistema_experto/FICHA_TECNICA.md)
+- [Red Semántica - Modelo Conceptual](docs/red_semantica_modelo_conceptual/FICHA_TECNICA.md)
+- [Red de Frames Difusos - Modelo Lógico](docs/red_de_frames_difusos_modelo_logico/FICHA_TECNICA.md)
+- [Base Orientada a Grafos - Neo4j](docs/base_orientada_a_grafos_neo4j/FICHA_TECNICA.md)
+- [Integración Módulo Generativo - Ollama & LangChain](docs/integracion_modulo_generativo_ollama_langchain/FICHA_TECNICA.md)
+- [API del Asistente Inteligente](docs/api_del_asistente_inteligente/FICHA_TECNICA.md)
+
+Para una descripción general de la documentación, consulte el [índice principal](docs/README.md).
