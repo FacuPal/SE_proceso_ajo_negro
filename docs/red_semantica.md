@@ -2,6 +2,7 @@
 ---
 config:
   theme: redux-dark
+  layout: elk
 ---
 flowchart LR
 
